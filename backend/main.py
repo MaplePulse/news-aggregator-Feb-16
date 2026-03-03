@@ -166,6 +166,7 @@ def _db() -> sqlite3.Connection:
 
 def _init_db() -> None:
     with _db() as conn:
+        # Existing link-based enrichment cache (kept)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS enrich_cache (
@@ -176,6 +177,34 @@ def _init_db() -> None:
             )
             """
         )
+
+        # NEW: cluster-level enrichment cache (cluster_id -> title_en/summary_en)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cluster_enrich_cache (
+              cluster_id TEXT PRIMARY KEY,
+              title_en TEXT,
+              summary_en TEXT,
+              created_utc TEXT NOT NULL
+            )
+            """
+        )
+
+        # NEW: cached /top payloads (country+range+q+limit -> payload_json)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS top_cache (
+              cache_key TEXT PRIMARY KEY,
+              payload_json TEXT NOT NULL,
+              created_utc TEXT NOT NULL
+            )
+            """
+        )
+
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_enrich_created ON enrich_cache(created_utc)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_enrich_created ON cluster_enrich_cache(created_utc)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_top_cache_created ON top_cache(created_utc)")
+        conn.commit()
 
 
 _init_db()
@@ -288,7 +317,7 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12) -> feedparser.FeedParserDict
 
 
 # ----------------------------
-# Cache helpers
+# Cache helpers (link-based enrichment)
 # ----------------------------
 def _get_cached_enrich(link: str) -> Optional[Dict[str, Any]]:
     with _db() as conn:
@@ -318,6 +347,166 @@ def _set_cached_enrich(link: str, title_en: str, summary_en: str) -> None:
             """,
             (link, title_en, summary_en, _now_utc_iso()),
         )
+        conn.commit()
+
+
+# ----------------------------
+# NEW: cluster enrichment cache helpers
+# ----------------------------
+def _cluster_enrich_ttl_s() -> int:
+    try:
+        return int((os.getenv("CLUSTER_ENRICH_TTL_S") or "86400").strip())  # 24h default
+    except Exception:
+        return 86400
+
+
+def _get_cached_cluster_enrich(cluster_id: str) -> Optional[Dict[str, Any]]:
+    cid = (cluster_id or "").strip()
+    if not cid:
+        return None
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT title_en, summary_en, created_utc FROM cluster_enrich_cache WHERE cluster_id = ?",
+            (cid,),
+        ).fetchone()
+        if not row:
+            return None
+        return {"title_en": row["title_en"], "summary_en": row["summary_en"], "created_utc": row["created_utc"]}
+
+
+def _set_cached_cluster_enrich(cluster_id: str, title_en: str, summary_en: str) -> None:
+    cid = (cluster_id or "").strip()
+    if not cid:
+        return
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO cluster_enrich_cache (cluster_id, title_en, summary_en, created_utc)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(cluster_id) DO UPDATE SET
+              title_en=excluded.title_en,
+              summary_en=excluded.summary_en,
+              created_utc=excluded.created_utc
+            """,
+            (cid, title_en, summary_en, _now_utc_iso()),
+        )
+        conn.commit()
+
+
+def _iso_is_fresh(created_utc: str, ttl_s: int) -> bool:
+    if not created_utc:
+        return False
+    try:
+        dt = datetime.fromisoformat(created_utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - dt.astimezone(timezone.utc)
+        return age.total_seconds() <= float(ttl_s)
+    except Exception:
+        return False
+
+
+# ----------------------------
+# NEW: /top payload cache (SQLite TTL)
+# ----------------------------
+def _top_ttl_s() -> int:
+    try:
+        return int((os.getenv("TOP_TTL_S") or "120").strip())
+    except Exception:
+        return 120
+
+
+def _top_cache_max_rows() -> int:
+    try:
+        return int((os.getenv("TOP_CACHE_MAX_ROWS") or "300").strip())
+    except Exception:
+        return 300
+
+
+def _top_cache_key(country: str, range: str, q: str, limit: int) -> str:
+    c = (country or "").strip().lower()
+    r = (range or "").strip().lower()
+    qq = (q or "").strip().lower()
+    lim = int(limit)
+    return f"top|country={c}|range={r}|q={qq}|limit={lim}"
+
+
+def _top_cache_get(cache_key: str) -> Optional[Tuple[Dict[str, Any], int]]:
+    ttl = _top_ttl_s()
+    if ttl <= 0:
+        return None
+
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT payload_json, created_utc FROM top_cache WHERE cache_key = ?",
+            (cache_key,),
+        ).fetchone()
+
+    if not row:
+        return None
+
+    created = row["created_utc"] or ""
+    if not _iso_is_fresh(created, ttl):
+        return None
+
+    try:
+        payload = json.loads(row["payload_json"] or "{}")
+    except Exception:
+        return None
+
+    # compute age seconds
+    try:
+        dt = datetime.fromisoformat(created)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age_s = int((datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds())
+        if age_s < 0:
+            age_s = 0
+    except Exception:
+        age_s = 0
+
+    return payload, age_s
+
+
+def _top_cache_set(cache_key: str, payload: Dict[str, Any]) -> None:
+    ttl = _top_ttl_s()
+    if ttl <= 0:
+        return
+
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    now = _now_utc_iso()
+
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO top_cache (cache_key, payload_json, created_utc)
+            VALUES (?, ?, ?)
+            ON CONFLICT(cache_key) DO UPDATE SET
+              payload_json=excluded.payload_json,
+              created_utc=excluded.created_utc
+            """,
+            (cache_key, payload_json, now),
+        )
+        conn.commit()
+
+        # simple cap: delete oldest rows if too many
+        max_rows = _top_cache_max_rows()
+        if max_rows > 0:
+            count_row = conn.execute("SELECT COUNT(*) AS n FROM top_cache").fetchone()
+            n = int(count_row["n"]) if count_row and count_row["n"] is not None else 0
+            if n > max_rows:
+                to_delete = n - max_rows
+                keys = conn.execute(
+                    """
+                    SELECT cache_key FROM top_cache
+                    ORDER BY created_utc ASC
+                    LIMIT ?
+                    """,
+                    (to_delete,),
+                ).fetchall()
+                for r in keys:
+                    conn.execute("DELETE FROM top_cache WHERE cache_key = ?", (r["cache_key"],))
+                conn.commit()
 
 
 # ----------------------------
@@ -412,8 +601,6 @@ def _env_float(key: str, default: float) -> float:
 
 
 def _client_ip(req: Request) -> str:
-    # If you later run behind a proxy/load balancer, you can expand this to honor X-Forwarded-For safely.
-    # For now, keep it predictable.
     try:
         if req.client and req.client.host:
             return str(req.client.host)
@@ -464,10 +651,6 @@ def _rate_limit_check(req: Request) -> None:
 # Source category extraction + mapping
 # ----------------------------
 def _extract_entry_categories(entry: Dict[str, Any]) -> List[str]:
-    """
-    feedparser maps RSS <category> and Atom categories into entry.tags (list of dicts).
-    Some feeds may also expose entry.category or entry.categories.
-    """
     cats: List[str] = []
 
     tags = entry.get("tags")
@@ -529,10 +712,6 @@ def _norm_cat(s: str) -> str:
 
 
 def _map_source_category_to_topic(cat: str) -> Optional[str]:
-    """
-    Map Spanish/Portuguese (and some English) feed categories into our UI buckets.
-    Return None if unmappable.
-    """
     c = _norm_cat(cat)
     if not c:
         return None
@@ -878,7 +1057,7 @@ def _score_category(text: str, rules: Dict[str, Dict[str, float]]) -> Tuple[floa
 
 
 CATEGORY_RULES: Dict[str, Dict[str, Dict[str, float]]] = {
-    # (unchanged rules block; keeping exactly as you had it)
+    # (keeping your rules exactly)
     "Politics": {
         "strong": {
             "presidente": 4.0,
@@ -1381,10 +1560,9 @@ def _topic_label(a: Dict[str, Any]) -> str:
 
 
 # ----------------------------
-# Ranking v2 (tunable + explainable) - keeps rank_score but adds rank_factors
+# Ranking v2 (tunable + explainable)
 # ----------------------------
 def _rank_weights() -> Dict[str, float]:
-    # Defaults closely mirror your prior behavior.
     return {
         "recency_weight": _env_float("RANK_RECENCY_W", 5.0),
         "recency_tau_hours": _env_float("RANK_RECENCY_TAU_H", 10.0),
@@ -1483,6 +1661,8 @@ class EnrichItem(BaseModel):
     link: str
     source: str
     snippet: str = ""
+    # NEW: optional cluster_id (backwards compatible; frontend can add later)
+    cluster_id: Optional[str] = None
 
 
 class EnrichRequest(BaseModel):
@@ -1646,11 +1826,6 @@ def _collect_items(country: str, range: str, q: str, scan_cap: int = 999999) -> 
 
 
 def _hard_cap_limit(country_key: str, lim: int) -> int:
-    """
-    User feedback: "All Mercosur" can feel heavy and slow.
-    We hard-cap 'all' to 60 (approx 10 per country + ~10 MP).
-    Other country modes keep existing cap.
-    """
     c = (country_key or "").strip().lower()
     if c == "all":
         return max(1, min(lim, 60))
@@ -1686,7 +1861,7 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
         a["topic"] = _topic_label(a)
         score, factors = _rank_score_and_factors(a)
         a["rank_score"] = score
-        a["rank_factors"] = factors  # NEW, non-breaking
+        a["rank_factors"] = factors
 
     items.sort(
         key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
@@ -1715,87 +1890,6 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
     lim = _hard_cap_limit(c, lim)
 
     scan_cap = min(3000, max(300, lim * 12))
-    raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
-
-    groups: Dict[str, List[Dict[str, Any]]] = {}
-    for a in raw:
-        cid = _sig(a)
-        groups.setdefault(cid, []).append(a)
-
-    clusters: List[Dict[str, Any]] = []
-    for cid, items in groups.items():
-        for it in items:
-            it["topic"] = _topic_label(it)
-            score, factors = _rank_score_and_factors(it)
-            it["rank_score"] = score
-            it["rank_factors"] = factors  # NEW, non-breaking
-
-        best = items[0]
-        for it in items[1:]:
-            if _quality_score(it) > _quality_score(best):
-                best = it
-            elif _quality_score(it) == _quality_score(best):
-                if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
-                    best = it
-
-        seen_sources: Dict[str, Dict[str, Any]] = {}
-        for it in items:
-            sname = (it.get("source") or "").strip() or "Unknown"
-            if sname not in seen_sources:
-                seen_sources[sname] = {
-                    "source": sname,
-                    "link": it.get("link") or "",
-                    "published_utc": it.get("published_utc") or "",
-                }
-
-        sources_list = list(seen_sources.values())
-        cluster_topic = best.get("topic") or GENERAL_LABEL
-
-        best_out = dict(best)
-        best_out["cluster_id"] = cid
-
-        clusters.append(
-            {
-                "cluster_id": cid,
-                "topic": cluster_topic,
-                "duplicates_count": len(items),
-                "sources_count": len(sources_list),
-                "sources": sources_list,
-                "best_item": best_out,
-            }
-        )
-
-    clusters.sort(
-        key=lambda cobj: (
-            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
-            ((cobj.get("best_item") or {}).get("published_utc") or ""),
-        ),
-        reverse=True,
-    )
-
-    clusters = clusters[:lim]
-    return {"country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
-
-
-
-
-@app.get("/top")
-def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 30):
-    """
-    Top Stories: cluster-first feed intended for the homepage.
-    Returns the same general shape as /clusters but optimized for "top stories".
-    """
-    c = (country or "uy").strip().lower()
-
-    try:
-        lim = int(limit)
-    except Exception:
-        lim = 30
-
-    # Keep your existing "all" hard cap behavior
-    lim = _hard_cap_limit(c, lim)
-
-    scan_cap = min(3000, max(300, lim * 14))
     raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
 
     groups: Dict[str, List[Dict[str, Any]]] = {}
@@ -1858,6 +1952,110 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     return {"country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
 
 
+@app.get("/top")
+def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 30):
+    """
+    Top Stories: cluster-first feed intended for the homepage.
+    NOW includes:
+    - SQLite TTL cache for the whole /top response
+    - cluster_enrich_cache read-through (if cluster-level enrichment exists)
+    """
+    c = (country or "uy").strip().lower()
+
+    try:
+        lim = int(limit)
+    except Exception:
+        lim = 30
+
+    lim = _hard_cap_limit(c, lim)
+
+    cache_key = _top_cache_key(c, range, q, lim)
+    cached = _top_cache_get(cache_key)
+    if cached:
+        payload, age_s = cached
+        payload["cache_hit"] = True
+        payload["cache_age_s"] = age_s
+        payload["cache_ttl_s"] = _top_ttl_s()
+        return payload
+
+    scan_cap = min(3000, max(300, lim * 14))
+    raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
+
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for a in raw:
+        cid = _sig(a)
+        groups.setdefault(cid, []).append(a)
+
+    clusters: List[Dict[str, Any]] = []
+    for cid, items in groups.items():
+        for it in items:
+            it["topic"] = _topic_label(it)
+            score, factors = _rank_score_and_factors(it)
+            it["rank_score"] = score
+            it["rank_factors"] = factors
+
+        best = items[0]
+        for it in items[1:]:
+            if _quality_score(it) > _quality_score(best):
+                best = it
+            elif _quality_score(it) == _quality_score(best):
+                if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
+                    best = it
+
+        # Read-through cluster enrichment cache if available (optional)
+        cached_cluster = _get_cached_cluster_enrich(cid)
+        if cached_cluster and cached_cluster.get("title_en") and cached_cluster.get("summary_en"):
+            if _iso_is_fresh(cached_cluster.get("created_utc") or "", _cluster_enrich_ttl_s()):
+                best["title_en"] = cached_cluster.get("title_en") or ""
+                best["summary_en"] = cached_cluster.get("summary_en") or ""
+                best["has_cached_summary"] = True
+
+        seen_sources: Dict[str, Dict[str, Any]] = {}
+        for it in items:
+            sname = (it.get("source") or "").strip() or "Unknown"
+            if sname not in seen_sources:
+                seen_sources[sname] = {
+                    "source": sname,
+                    "link": it.get("link") or "",
+                    "published_utc": it.get("published_utc") or "",
+                }
+
+        sources_list = list(seen_sources.values())
+        cluster_topic = best.get("topic") or GENERAL_LABEL
+
+        best_out = dict(best)
+        best_out["cluster_id"] = cid
+
+        clusters.append(
+            {
+                "cluster_id": cid,
+                "topic": cluster_topic,
+                "duplicates_count": len(items),
+                "sources_count": len(sources_list),
+                "sources": sources_list,
+                "best_item": best_out,
+            }
+        )
+
+    clusters.sort(
+        key=lambda cobj: (
+            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
+            ((cobj.get("best_item") or {}).get("published_utc") or ""),
+        ),
+        reverse=True,
+    )
+
+    clusters = clusters[:lim]
+    payload = {"country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
+
+    _top_cache_set(cache_key, payload)
+
+    payload["cache_hit"] = False
+    payload["cache_age_s"] = 0
+    payload["cache_ttl_s"] = _top_ttl_s()
+    return payload
+
+
 @app.post("/enrich")
 def enrich_items(req: EnrichRequest, request: Request):
     _rate_limit_check(request)
@@ -1896,6 +2094,7 @@ def enrich_items(req: EnrichRequest, request: Request):
                 "source": (it.source or "").strip(),
                 "title": (it.title or "").strip(),
                 "snippet": _clean_text_any((it.snippet or "").strip(), max_chars=700),
+                "cluster_id": (it.cluster_id or "").strip(),
             }
         )
 
@@ -1935,6 +2134,23 @@ def enrich_items(req: EnrichRequest, request: Request):
 
         if title_en and summary_en:
             _set_cached_enrich(link, title_en, summary_en)
+
+        # If client provided cluster_id in request payload, write cluster cache too
+        # (backwards compatible: older clients won't send it)
+        # We stored it in "payload" we sent to the model; we can map it back by link.
+        # Safest: only upsert if request included a matching cluster_id for this link.
+        # We'll scan original req items for matching link.
+        if title_en and summary_en:
+            try:
+                cid = ""
+                for it in req.items:
+                    if (it.link or "").strip() == link:
+                        cid = (it.cluster_id or "").strip()
+                        break
+                if cid:
+                    _set_cached_cluster_enrich(cid, title_en, summary_en)
+            except Exception:
+                pass
 
         out_items.append({"link": link, "title_en": title_en, "summary_en": summary_en, "cached": False})
 
@@ -2092,7 +2308,6 @@ def _worker_loop() -> None:
                     bucket_queued = 0
                     bucket_enriched = 0
 
-                    # align worker with "all is capped" behavior
                     effective_scan_limit = int(scan_limit)
                     if (c or "").lower() == "all":
                         effective_scan_limit = min(effective_scan_limit, 60)
