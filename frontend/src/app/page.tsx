@@ -279,16 +279,25 @@ export default function Home() {
   async function enrichBatch(links: string[]) {
     if (links.length === 0) return;
 
+    // Map link -> best_item for payload fields
     const lookup = new Map(currentArticlesForEnrichLookup().map((a) => [a.link, a]));
+    // Map link -> cluster_id (so backend can cache per cluster)
+    const linkToClusterId = new Map(clusters.map((c) => [c.best_item.link, c.cluster_id]));
+
     const batch = links
-      .map((l) => lookup.get(l))
-      .filter(Boolean)
-      .map((a) => ({
-        title: a!.title,
-        link: a!.link,
-        source: a!.source,
-        snippet: a!.snippet_text,
-      }));
+      .map((l) => {
+        const a = lookup.get(l);
+        if (!a) return null;
+        const cluster_id = linkToClusterId.get(l) || "";
+        return {
+          title: a.title,
+          link: a.link,
+          source: a.source,
+          snippet: a.snippet_text,
+          cluster_id, // ✅ NEW: enables cluster-level caching in backend
+        };
+      })
+      .filter(Boolean) as any[];
 
     if (batch.length === 0) return;
 
