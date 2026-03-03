@@ -18,12 +18,13 @@ type Article = {
 
   topic?: string | null;
 
-  // backend may include these; optional so we don't break if absent
   published_utc?: string | null;
   duplicates_count?: number | null;
   rank_score?: number | null;
 
-  // backend category transparency fields (kept for debugging via DevTools, not shown in UI)
+  // NEW (non-breaking): explainable ranking fields from backend
+  rank_factors?: any;
+
   source_categories?: string[] | null;
   source_category_primary?: string | null;
 };
@@ -52,7 +53,6 @@ const OBSERVER_ROOT_MARGIN = "900px";
 
 const UNCATEGORIZED = "General";
 
-// Category order for dropdown (General last)
 const CATEGORY_ORDER = [
   "Politics",
   "Economy",
@@ -96,7 +96,10 @@ function includesQuery(haystack: string | null | undefined, q: string) {
   return haystack.toLowerCase().includes(q);
 }
 
-function limitForRange(range: string) {
+function limitForRangeAndCountry(range: string, country: CountryOption["key"]) {
+  // User feedback: "All Mercosur" feels heavy. Cap to 60 total.
+  if (country === "all") return 60;
+
   switch ((range || "").toLowerCase()) {
     case "24h":
       return 40;
@@ -129,7 +132,21 @@ function toEpochMs(a: Article): number {
   return 0;
 }
 
-// Minimal type for the PWA install prompt event (Chrome/Edge/Android)
+// UI feedback: show UTC time without seconds
+function formatPublishedUTC(a: Article) {
+  const iso = (a.published_utc || "").trim();
+  if (!iso) return a.published || "";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return a.published || "";
+  const d = new Date(t);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const min = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${min} UTC`;
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -150,7 +167,7 @@ function isStandalone() {
 function normalizeTopic(t: string | null | undefined) {
   const raw = (t || "").trim();
   if (!raw) return UNCATEGORIZED;
-  if (raw.toLowerCase() === "uncategorized") return UNCATEGORIZED; // backend legacy label
+  if (raw.toLowerCase() === "uncategorized") return UNCATEGORIZED;
   return raw;
 }
 
@@ -175,16 +192,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
 
-  // Hydration-safe theme:
-  // - Always start "dark" for initial render
-  // - After mount, read localStorage and sync
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [mounted, setMounted] = useState(false);
 
-  // Info modal
   const [infoOpen, setInfoOpen] = useState(false);
 
-  // Add-to-home / install support
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [ios, setIos] = useState(false);
@@ -199,9 +211,6 @@ export default function Home() {
 
   const normalizedQuery = useMemo(() => query.trim().toLowerCase(), [query]);
 
-  // Build dropdown options:
-  // - show fixed list (CATEGORY_ORDER)
-  // - but only enable categories that exist in data (General always exists)
   const topicsInData = useMemo(() => {
     const s = new Set<string>();
     for (const a of articles) s.add(normalizeTopic(a.topic));
@@ -210,11 +219,9 @@ export default function Home() {
   }, [articles]);
 
   const categoryOptions = useMemo(() => {
-    // Always show the full fixed order, disable those not present.
     return CATEGORY_ORDER;
   }, []);
 
-  // If the user had a category selected that isn't available in the current dataset, reset to "all".
   useEffect(() => {
     if (category !== "all" && !topicsInData.has(category)) {
       setCategory("all");
@@ -224,12 +231,10 @@ export default function Home() {
   const filteredArticles = useMemo(() => {
     let list = articles;
 
-    // Category filter first (fast)
     if (category !== "all") {
       list = list.filter((a) => normalizeTopic(a.topic) === category);
     }
 
-    // Search filter
     if (!normalizedQuery) return list;
 
     return list.filter((a) => {
@@ -243,10 +248,6 @@ export default function Home() {
     });
   }, [articles, normalizedQuery, category]);
 
-  // Apply sort AFTER filtering.
-  // - "smart": keep backend order exactly
-  // - "newest": sort by published_utc desc
-  // - "duplicates": sort by duplicates_count desc, tie-break newest
   const displayedArticles = useMemo(() => {
     if (sortMode === "smart") return filteredArticles;
 
@@ -257,7 +258,6 @@ export default function Home() {
       return copy;
     }
 
-    // duplicates
     copy.sort((a, b) => {
       const da = Number(a.duplicates_count || 1);
       const db = Number(b.duplicates_count || 1);
@@ -273,47 +273,33 @@ export default function Home() {
     [displayedArticles]
   );
 
-  // Read saved theme + saved sort only after mount (prevents hydration mismatch)
   useEffect(() => {
     setMounted(true);
 
-    // theme
     try {
       const saved = window.localStorage.getItem("theme");
       const t = saved === "light" || saved === "dark" ? saved : "dark";
       setTheme(t);
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // sort
     try {
       const savedSort = window.localStorage.getItem("sortMode");
       if (savedSort === "smart" || savedSort === "newest" || savedSort === "duplicates") {
         setSortMode(savedSort);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // category
     try {
       const savedCat = window.localStorage.getItem("category");
       if (savedCat) setCategory(savedCat as CategoryFilter);
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // install context
     try {
       setIos(isIOS());
       setStandalone(isStandalone());
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
 
-  // Handle beforeinstallprompt (Chrome/Edge)
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
@@ -322,13 +308,10 @@ export default function Home() {
 
     window.addEventListener("beforeinstallprompt", handler);
 
-    // Re-check standalone on visibility changes (some browsers update later)
     const vis = () => {
       try {
         setStandalone(isStandalone());
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
     document.addEventListener("visibilitychange", vis);
 
@@ -338,35 +321,26 @@ export default function Home() {
     };
   }, []);
 
-  // Apply + persist theme after mount
   useEffect(() => {
     if (!mounted) return;
     applyTheme(theme);
     try {
       window.localStorage.setItem("theme", theme);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [theme, mounted]);
 
-  // Persist sort after mount
   useEffect(() => {
     if (!mounted) return;
     try {
       window.localStorage.setItem("sortMode", sortMode);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [sortMode, mounted]);
 
-  // Persist category after mount
   useEffect(() => {
     if (!mounted) return;
     try {
       window.localStorage.setItem("category", category);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [category, mounted]);
 
   function openTranslated(link: string) {
@@ -381,7 +355,7 @@ export default function Home() {
   async function loadNews(selectedRange = range, selectedCountry = country) {
     setLoading(true);
 
-    const limit = limitForRange(selectedRange);
+    const limit = limitForRangeAndCountry(selectedRange, selectedCountry);
 
     const res = await fetch(
       `/api/news?country=${encodeURIComponent(selectedCountry)}&range=${encodeURIComponent(
@@ -498,25 +472,20 @@ export default function Home() {
   async function handleInstallClick() {
     if (standalone) return;
 
-    // If the browser supports a real install prompt, use it.
     if (installEvent) {
       try {
         await installEvent.prompt();
         await installEvent.userChoice;
-      } catch {
-        // ignore
-      }
+      } catch {}
       return;
     }
 
-    // Otherwise we can only show instructions (iOS/Safari/Not installable yet).
     setInfoOpen(true);
   }
 
   const selectedCountryName = MERCOSUR_COUNTRIES.find((c) => c.key === country)?.name || "Uruguay";
 
-  const statusText = missingCount > 0 ? (enriching ? "Refreshing..." : "Updating...") : "Up to date";
-
+  // UI feedback: remove "Updating/Refreshing" text entirely
   const installButtonLabel = installEvent ? "Install" : "Add to Home";
 
   return (
@@ -540,7 +509,6 @@ export default function Home() {
             <span className="italic font-semibold">i</span>
           </button>
 
-          {/* Hide install button when already installed */}
           {!standalone ? (
             <button
               onClick={handleInstallClick}
@@ -551,9 +519,10 @@ export default function Home() {
             </button>
           ) : null}
 
+          {/* UI feedback: make theme button smaller */}
           <button
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            className="inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90"
+            className="inline-flex items-center rounded-full border border-gray-500 px-3 py-1.5 text-xs transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90"
           >
             {mounted ? (theme === "dark" ? "Light mode" : "Dark mode") : "Theme"}
           </button>
@@ -565,14 +534,13 @@ export default function Home() {
       <div className="flex items-baseline justify-between gap-4 mb-6">
         <h2 className="text-3xl font-bold">{selectedCountryName} News</h2>
 
+        {/* UI feedback: remove updating/refreshing */}
         <span className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm whitespace-nowrap">
-          {loading ? "Refreshing..." : statusText}
+          {loading ? "" : missingCount > 0 ? "" : ""}
         </span>
       </div>
 
-      {/* Controls row */}
       <div className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
-        {/* Date Range */}
         <div className="md:col-span-3">
           <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Date Range</label>
           <select
@@ -591,7 +559,6 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Select Country */}
         <div className="md:col-span-3">
           <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Select Country</label>
           <select
@@ -611,7 +578,6 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Category */}
         <div className="md:col-span-3">
           <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Category</label>
           <select
@@ -628,20 +594,16 @@ export default function Home() {
           </select>
         </div>
 
-        {/* Search */}
         <div className="md:col-span-3">
           <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Search</label>
 
           <div className="flex items-center gap-3">
-            <textarea
-              rows={2}
-              className="h-10 w-full text-xs leading-tight border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-black dark:text-white px-3 py-2 rounded placeholder:text-gray-500 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-gray-400"
-              placeholder={"Headlines\n& summaries"}
+            {/* UI feedback: one-line placeholder */}
+            <input
+              className="h-10 w-full text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-black dark:text-white px-3 rounded placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              placeholder={"Headlines & summaries"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.preventDefault();
-              }}
             />
 
             <button
@@ -728,7 +690,8 @@ export default function Home() {
                 </div>
               )}
 
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{a.published}</p>
+              {/* UI feedback: remove seconds, display UTC */}
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{formatPublishedUTC(a)}</p>
 
               <button
                 onClick={() => openTranslated(a.link)}
@@ -749,20 +712,23 @@ export default function Home() {
             aria-label="Close"
             onClick={() => setInfoOpen(false)}
           />
-          <div className="relative w-full max-w-xl rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black p-5">
+          {/* Mobile safe: max height + scroll */}
+          <div className="relative w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">About Mercosur News</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  A Mercosur regional news headline aggregator with English translation and summaries.
+                  RSS headlines across Mercosur, translated to English with short summaries.
                 </p>
               </div>
+
+              {/* UI feedback: replace X with small "Close" */}
               <button
                 onClick={() => setInfoOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 dark:border-gray-700 hover:opacity-90"
+                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:opacity-90"
                 aria-label="Close modal"
               >
-                ×
+                Close
               </button>
             </div>
 
@@ -774,7 +740,7 @@ export default function Home() {
                 </p>
                 <p className="mt-2">
                   As you scroll, headlines are translated into English and paired with short English summaries. You can
-                  also open the original source article via Google Translate to view the full story in English.
+                  open any source article via Google Translate to view the full story in English.
                 </p>
               </div>
 
@@ -782,18 +748,17 @@ export default function Home() {
                 <div className="font-semibold text-gray-900 dark:text-white">How to use</div>
                 <ul className="mt-2 list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-400">
                   <li>
-                    <span className="text-gray-800 dark:text-white/80">Date Range:</span> filter the feed by recency.
+                    <span className="text-gray-800 dark:text-white/80">Date Range:</span> filter by recency.
                   </li>
                   <li>
-                    <span className="text-gray-800 dark:text-white/80">Select Country:</span> view coverage by country
-                    (or all Mercosur / MercoPress).
+                    <span className="text-gray-800 dark:text-white/80">Select Country:</span> view by country (or all /
+                    MercoPress).
                   </li>
                   <li>
-                    <span className="text-gray-800 dark:text-white/80">Category:</span> filter the feed by topic.
+                    <span className="text-gray-800 dark:text-white/80">Category:</span> filter by topic.
                   </li>
                   <li>
-                    <span className="text-gray-800 dark:text-white/80">Search:</span> filter headlines and summaries on
-                    the page.
+                    <span className="text-gray-800 dark:text-white/80">Search:</span> filter headlines and summaries.
                   </li>
                 </ul>
               </div>
@@ -817,21 +782,20 @@ export default function Home() {
                   </div>
                 ) : ios ? (
                   <div className="mt-2 text-gray-600 dark:text-gray-400">
-                    On iPhone/iPad: tap the Share button in Safari, then choose “Add to Home Screen”.
+                    On iPhone/iPad: tap Share in Safari, then choose “Add to Home Screen”.
                   </div>
                 ) : (
                   <div className="mt-2 text-gray-600 dark:text-gray-400">
-                    If you don’t see an Install prompt, the site may not be installable in this browser yet. In many
-                    cases this requires HTTPS and a valid PWA setup (manifest + service worker).
+                    If you don’t see an Install prompt, the site may not be installable in this browser yet.
                   </div>
                 )}
               </div>
 
               <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-                <div className="font-semibold text-gray-900 dark:text-white">What you’re seeing</div>
+                <div className="font-semibold text-gray-900 dark:text-white">Notes</div>
                 <p className="mt-2 text-gray-600 dark:text-gray-400">
-                  Topics are automatically labeled based on the article content. Translation and summarization are
-                  performed on-demand as stories enter view to keep the feed responsive.
+                  Topics are automatically labeled. Translation and summarization are generated as stories enter view to
+                  keep the feed responsive.
                 </p>
               </div>
             </div>

@@ -382,7 +382,7 @@ def _news_cache_set(key: str, payload: Dict[str, Any]) -> None:
 
 
 # ----------------------------
-# Simple rate limit (NEW) – protects /enrich from abuse + protects your OpenAI spend
+# Simple rate limit – protects /enrich from abuse + protects your OpenAI spend
 # ----------------------------
 _RATE_LOCK = threading.Lock()
 _RATE_BUCKETS: Dict[str, List[float]] = {}
@@ -404,6 +404,13 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+def _env_float(key: str, default: float) -> float:
+    try:
+        return float((os.getenv(key) or "").strip())
+    except Exception:
+        return default
+
+
 def _client_ip(req: Request) -> str:
     # If you later run behind a proxy/load balancer, you can expand this to honor X-Forwarded-For safely.
     # For now, keep it predictable.
@@ -417,7 +424,7 @@ def _client_ip(req: Request) -> str:
 
 def _rate_limit_check(req: Request) -> None:
     """
-    Very simple fixed-window-ish limiter (rolling window):
+    Very simple rolling window limiter:
     - ENRICH_RATE_LIMIT_ENABLED (default true)
     - ENRICH_RPM (default 30)
     - ENRICH_WINDOW_S (default 60)
@@ -439,14 +446,13 @@ def _rate_limit_check(req: Request) -> None:
 
     with _RATE_LOCK:
         bucket = _RATE_BUCKETS.get(ip) or []
-        # drop old timestamps
         bucket = [t for t in bucket if t >= cutoff]
 
         if len(bucket) >= rpm:
             retry_after = 5
             raise HTTPException(
                 status_code=429,
-                detail=f"Rate limit exceeded for /enrich. Try again in a few seconds.",
+                detail="Rate limit exceeded for /enrich. Try again in a few seconds.",
                 headers={"Retry-After": str(retry_after)},
             )
 
@@ -464,7 +470,6 @@ def _extract_entry_categories(entry: Dict[str, Any]) -> List[str]:
     """
     cats: List[str] = []
 
-    # tags is the main place
     tags = entry.get("tags")
     if isinstance(tags, list):
         for t in tags:
@@ -480,12 +485,10 @@ def _extract_entry_categories(entry: Dict[str, Any]) -> List[str]:
             except Exception:
                 continue
 
-    # sometimes category is a single string
     cat = entry.get("category")
     if isinstance(cat, str) and cat.strip():
         cats.append(cat.strip())
 
-    # sometimes categories is a list
     categories = entry.get("categories")
     if isinstance(categories, list):
         for c in categories:
@@ -503,7 +506,6 @@ def _extract_entry_categories(entry: Dict[str, Any]) -> List[str]:
             except Exception:
                 continue
 
-    # de-dupe, preserve order
     seen = set()
     out: List[str] = []
     for c in cats:
@@ -535,7 +537,6 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     if not c:
         return None
 
-    # Sports
     if any(
         x in c
         for x in [
@@ -554,7 +555,6 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Sports"
 
-    # Politics / National
     if any(
         x in c
         for x in [
@@ -570,7 +570,6 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Politics"
 
-    # Economy / Business / Markets
     if (
         "mercado" in c
         or "markets" in c
@@ -586,11 +585,9 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     if "econom" in c or "inflacion" in c or "inflación" in c or "pib" in c or "macro" in c:
         return "Economy"
 
-    # World / International
     if any(x in c for x in ["internacional", "internacionales", "mundo", "world", "exterior", "global"]):
         return "World"
 
-    # Society / Local / General news sections
     if any(
         x in c
         for x in [
@@ -609,19 +606,15 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Society"
 
-    # Education
     if any(x in c for x in ["educacion", "educación", "escuela", "liceo", "universidad", "udelar", "ensenanza", "enseñanza"]):
         return "Education"
 
-    # Health
     if any(x in c for x in ["salud", "health", "hospital", "medicina", "covid", "dengue"]):
         return "Health"
 
-    # Science
     if any(x in c for x in ["ciencia", "science", "investigacion", "investigación", "laboratorio", "espacio", "astronomia", "astronomía"]):
         return "Science"
 
-    # Technology (kept strict here; categories are usually explicit)
     if any(
         x in c
         for x in [
@@ -641,11 +634,9 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Technology"
 
-    # Energy
     if any(x in c for x in ["energia", "energía", "petroleo", "petróleo", "gas", "ute", "ancap", "combustible", "renovable", "eolica", "eólica", "solar"]):
         return "Energy"
 
-    # Environment
     if any(
         x in c
         for x in [
@@ -664,7 +655,6 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Environment"
 
-    # Security / Police / Courts
     if any(
         x in c
         for x in [
@@ -684,11 +674,9 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "Security"
 
-    # Culture
     if any(x in c for x in ["cultura", "culture", "arte", "artes", "cine", "teatro", "musica", "música", "festival", "literatura"]):
         return "Culture"
 
-    # Common domestic labels -> Society
     if any(x in c for x in ["nacional", "nacionales", "pais", "país", "uruguay", "argentina", "brasil", "paraguay", "bolivia"]):
         return "Society"
 
@@ -748,7 +736,6 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
         "source_logo": source.get("source_logo"),
         "snippet_text": snippet_text,
         "has_cached_summary": False,
-        # NEW (non-breaking): raw categories from the feed
         "source_categories": source_categories,
         "source_category_primary": source_category_primary,
     }
@@ -891,6 +878,7 @@ def _score_category(text: str, rules: Dict[str, Dict[str, float]]) -> Tuple[floa
 
 
 CATEGORY_RULES: Dict[str, Dict[str, Dict[str, float]]] = {
+    # (unchanged rules block; keeping exactly as you had it)
     "Politics": {
         "strong": {
             "presidente": 4.0,
@@ -1327,7 +1315,6 @@ NON_SPORTS_DOMINATORS = [
 
 
 def _topic_label(a: Dict[str, Any]) -> str:
-    # ✅ Source categories first
     source_topic = _topic_from_source_categories(a)
     if source_topic:
         if _env_bool("TOPIC_DEBUG", default=False):
@@ -1338,7 +1325,6 @@ def _topic_label(a: Dict[str, Any]) -> str:
             }
         return source_topic
 
-    # Fallback: text-scoring
     raw = " ".join(
         [
             str(a.get("title_en") or ""),
@@ -1359,7 +1345,6 @@ def _topic_label(a: Dict[str, Any]) -> str:
         scores[label] = s
         debug_hits[label] = matched
 
-    # Sports guardrails
     if "Sports" in scores:
         sports_score = scores.get("Sports") or 0.0
         has_anchor = any(anchor in text for anchor in SPORTS_ANCHORS) or bool(_SCORE_PATTERN.search(text))
@@ -1396,9 +1381,21 @@ def _topic_label(a: Dict[str, Any]) -> str:
 
 
 # ----------------------------
-# Ranking v1 (kept)
+# Ranking v2 (tunable + explainable) - keeps rank_score but adds rank_factors
 # ----------------------------
-def _rank_score(a: Dict[str, Any]) -> float:
+def _rank_weights() -> Dict[str, float]:
+    # Defaults closely mirror your prior behavior.
+    return {
+        "recency_weight": _env_float("RANK_RECENCY_W", 5.0),
+        "recency_tau_hours": _env_float("RANK_RECENCY_TAU_H", 10.0),
+        "duplicates_weight": _env_float("RANK_DUP_W", 0.8),
+        "snippet_weight": _env_float("RANK_SNIP_W", 0.8),
+        "cached_weight": _env_float("RANK_CACHED_W", 0.5),
+        "mercopress_boost": _env_float("RANK_MP_BOOST", 0.6),
+    }
+
+
+def _rank_score_and_factors(a: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
     now = datetime.now(timezone.utc)
 
     pu = a.get("published_utc") or ""
@@ -1413,20 +1410,53 @@ def _rank_score(a: Dict[str, Any]) -> float:
     else:
         age_hours = 6.0
 
-    recency = math.exp(-age_hours / 10.0)
+    w = _rank_weights()
+
+    tau = max(1e-6, float(w["recency_tau_hours"]))
+    recency_raw = math.exp(-age_hours / tau)
+    recency_term = recency_raw * float(w["recency_weight"])
 
     dup = int(a.get("duplicates_count") or 1)
-    dup_boost = math.log1p(max(1, dup))
+    dup_raw = math.log1p(max(1, dup))
+    dup_term = dup_raw * float(w["duplicates_weight"])
 
     snip_len = len((a.get("snippet_text") or "").strip())
-    snip = min(1.0, snip_len / 220.0)
+    snip_raw = min(1.0, snip_len / 220.0)
+    snip_term = snip_raw * float(w["snippet_weight"])
 
     has_cached = 1.0 if a.get("has_cached_summary") else 0.0
+    cached_term = has_cached * float(w["cached_weight"])
 
     is_mercopress = (a.get("country_key") or "").lower() == "mp"
-    mp_boost = 0.6 if is_mercopress else 0.0
+    mp_term = float(w["mercopress_boost"]) if is_mercopress else 0.0
 
-    return float(recency * 5.0 + dup_boost * 0.8 + snip * 0.8 + has_cached * 0.5 + mp_boost)
+    score = float(recency_term + dup_term + snip_term + cached_term + mp_term)
+
+    factors: Dict[str, Any] = {
+        "age_hours": round(float(age_hours), 3),
+        "recency_raw": round(float(recency_raw), 6),
+        "recency_term": round(float(recency_term), 6),
+        "dup_count": int(dup),
+        "dup_raw": round(float(dup_raw), 6),
+        "dup_term": round(float(dup_term), 6),
+        "snippet_len": int(snip_len),
+        "snippet_raw": round(float(snip_raw), 6),
+        "snippet_term": round(float(snip_term), 6),
+        "has_cached_summary": bool(a.get("has_cached_summary")),
+        "cached_term": round(float(cached_term), 6),
+        "is_mercopress": bool(is_mercopress),
+        "mp_term": round(float(mp_term), 6),
+        "weights": {
+            "recency_weight": w["recency_weight"],
+            "recency_tau_hours": w["recency_tau_hours"],
+            "duplicates_weight": w["duplicates_weight"],
+            "snippet_weight": w["snippet_weight"],
+            "cached_weight": w["cached_weight"],
+            "mercopress_boost": w["mercopress_boost"],
+        },
+    }
+
+    return score, factors
 
 
 # ----------------------------
@@ -1467,11 +1497,9 @@ def read_root():
     return {"message": "News Aggregator API is running"}
 
 
-# ✅ NEW: health endpoint (hosting + uptime checks)
 @app.get("/healthz")
 def healthz():
     try:
-        # quick DB open to prove disk+sqlite are healthy
         with _db() as conn:
             conn.execute("SELECT 1").fetchone()
         db_ok = True
@@ -1562,7 +1590,6 @@ def debug_sources():
     return out
 
 
-# ✅ Backwards compatible: keep /uy-news working exactly like before
 @app.get("/uy-news")
 def get_uruguay_news(range: str = "24h", q: str = "", limit: int = 50):
     return get_news(country="uy", range=range, q=q, limit=limit)
@@ -1618,6 +1645,18 @@ def _collect_items(country: str, range: str, q: str, scan_cap: int = 999999) -> 
     return items
 
 
+def _hard_cap_limit(country_key: str, lim: int) -> int:
+    """
+    User feedback: "All Mercosur" can feel heavy and slow.
+    We hard-cap 'all' to 60 (approx 10 per country + ~10 MP).
+    Other country modes keep existing cap.
+    """
+    c = (country_key or "").strip().lower()
+    if c == "all":
+        return max(1, min(lim, 60))
+    return max(1, min(lim, 200))
+
+
 @app.get("/news")
 def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 50):
     c = (country or "uy").strip().lower()
@@ -1626,7 +1665,8 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
         lim = int(limit)
     except Exception:
         lim = 50
-    lim = max(1, min(lim, 200))
+
+    lim = _hard_cap_limit(c, lim)
 
     cache_key = f"country={c}|range={range}|q={q}|limit={lim}"
     cached = _news_cache_get(cache_key)
@@ -1644,7 +1684,9 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
     for a in items:
         a["cluster_id"] = _sig(a)
         a["topic"] = _topic_label(a)
-        a["rank_score"] = _rank_score(a)
+        score, factors = _rank_score_and_factors(a)
+        a["rank_score"] = score
+        a["rank_factors"] = factors  # NEW, non-breaking
 
     items.sort(
         key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
@@ -1669,7 +1711,8 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
         lim = int(limit)
     except Exception:
         lim = 50
-    lim = max(1, min(lim, 200))
+
+    lim = _hard_cap_limit(c, lim)
 
     scan_cap = min(3000, max(300, lim * 12))
     raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
@@ -1683,7 +1726,9 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
     for cid, items in groups.items():
         for it in items:
             it["topic"] = _topic_label(it)
-            it["rank_score"] = _rank_score(it)
+            score, factors = _rank_score_and_factors(it)
+            it["rank_score"] = score
+            it["rank_factors"] = factors  # NEW, non-breaking
 
         best = items[0]
         for it in items[1:]:
@@ -1734,7 +1779,6 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
 
 @app.post("/enrich")
 def enrich_items(req: EnrichRequest, request: Request):
-    # ✅ NEW: rate limit guard (protects OpenAI cost)
     _rate_limit_check(request)
 
     if not req.items:
@@ -1817,7 +1861,7 @@ def enrich_items(req: EnrichRequest, request: Request):
 
 
 # ----------------------------
-# Background Pre-Enrichment Worker (kept, but now uses FRESH fetch)
+# Background Pre-Enrichment Worker
 # ----------------------------
 _worker_lock = threading.Lock()
 _worker_running = False
@@ -1967,19 +2011,25 @@ def _worker_loop() -> None:
                     bucket_queued = 0
                     bucket_enriched = 0
 
-                    scan_cap = max(150, int(scan_limit) * 8)
+                    # align worker with "all is capped" behavior
+                    effective_scan_limit = int(scan_limit)
+                    if (c or "").lower() == "all":
+                        effective_scan_limit = min(effective_scan_limit, 60)
+
+                    scan_cap = max(150, int(effective_scan_limit) * 8)
                     items = _collect_items(country=c, range=r, q="", scan_cap=scan_cap)
                     items = _dedupe(items)
 
                     for a in items:
-                        a["rank_score"] = _rank_score(a)
+                        score, _factors = _rank_score_and_factors(a)
+                        a["rank_score"] = score
 
                     items.sort(
                         key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
                         reverse=True,
                     )
 
-                    top = items[: int(scan_limit)]
+                    top = items[: int(effective_scan_limit)]
                     bucket_scanned = len(top)
 
                     candidates: List[Dict[str, str]] = []

@@ -26,7 +26,6 @@ export const metadata: Metadata = {
 };
 
 function ThemeInitScript() {
-  // Runs before React hydration, so theme class is correct from first paint.
   const code = `
 (function () {
   try {
@@ -43,7 +42,6 @@ function ThemeInitScript() {
 }
 
 function ServiceWorkerRegisterScript() {
-  // Register SW after load; safe and minimal. Doesn't affect layout/hydration.
   const code = `
 (function () {
   try {
