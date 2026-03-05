@@ -190,6 +190,19 @@ def _init_db() -> None:
             """
         )
 
+        # cluster metadata cache (cluster_id -> keywords/entities/confidence)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cluster_meta_cache (
+              cluster_id TEXT PRIMARY KEY,
+              keywords_json TEXT,
+              entities_json TEXT,
+              confidence REAL,
+              created_utc TEXT NOT NULL
+            )
+            """
+        )
+
         # cached /top payloads (country+range+q+limit -> payload_json)
         conn.execute(
             """
@@ -203,6 +216,7 @@ def _init_db() -> None:
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_enrich_created ON enrich_cache(created_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_enrich_created ON cluster_enrich_cache(created_utc)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_meta_created ON cluster_meta_cache(created_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_top_cache_created ON top_cache(created_utc)")
         conn.commit()
 
@@ -418,6 +432,42 @@ def _set_cached_cluster_enrich(cluster_id: str, title_en: str, summary_en: str) 
 
 
 # ----------------------------
+# Cluster meta cache helpers (keywords/entities/confidence)
+# ----------------------------
+def _set_cluster_meta(cluster_id: str, keywords: List[str], entities: List[str], confidence: float) -> None:
+    cid = (cluster_id or "").strip()
+    if not cid:
+        return
+    try:
+        keywords_json = json.dumps(keywords, ensure_ascii=False)
+        entities_json = json.dumps(entities, ensure_ascii=False)
+    except Exception:
+        keywords_json = "[]"
+        entities_json = "[]"
+
+    conf = float(confidence)
+    if conf < 0.0:
+        conf = 0.0
+    if conf > 1.0:
+        conf = 1.0
+
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO cluster_meta_cache (cluster_id, keywords_json, entities_json, confidence, created_utc)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_id) DO UPDATE SET
+              keywords_json=excluded.keywords_json,
+              entities_json=excluded.entities_json,
+              confidence=excluded.confidence,
+              created_utc=excluded.created_utc
+            """,
+            (cid, keywords_json, entities_json, conf, _now_utc_iso()),
+        )
+        conn.commit()
+
+
+# ----------------------------
 # /top payload cache (SQLite TTL)
 # ----------------------------
 def _top_ttl_s() -> int:
@@ -542,7 +592,6 @@ def _inject_cluster_cache_into_payload(payload: Dict[str, Any]) -> None:
             if not isinstance(best_item, dict):
                 continue
 
-            # If best_item already has a summary/title, skip
             if (best_item.get("title_en") and best_item.get("summary_en")):
                 continue
 
@@ -975,7 +1024,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
 
 
 # ----------------------------
-# Deduplication + clustering signature
+# Deduplication (kept)
 # ----------------------------
 _NON_WORD = re.compile(r"[^a-z0-9\s]")
 
@@ -1000,6 +1049,9 @@ def _day_bucket(published_utc: Optional[str]) -> str:
 
 
 def _sig(article: Dict[str, Any]) -> str:
+    """
+    v1 signature (kept for backwards compatibility, but /top and /clusters now use v2 clustering IDs).
+    """
     ck = (article.get("country_key") or "").lower() or "x"
     day = _day_bucket(article.get("published_utc"))
     nt = _norm_title(article.get("title") or "")
@@ -1036,6 +1088,298 @@ def _dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if c > 1:
             a["duplicates_count"] = c
     return out
+
+
+# ----------------------------
+# Smarter clustering v2 (bucket -> similarity merge)
+# ----------------------------
+_STOPWORDS = set(
+    [
+        # Spanish
+        "de", "la", "el", "los", "las", "y", "o", "u", "a", "en", "por", "para", "con", "sin",
+        "del", "al", "un", "una", "unos", "unas", "que", "se", "su", "sus", "ya", "como", "más",
+        "menos", "también", "pero", "tras", "ante", "sobre", "entre", "desde", "hasta",
+        # Portuguese
+        "de", "da", "do", "das", "dos", "e", "ou", "a", "o", "os", "as", "em", "por", "para",
+        "com", "sem", "um", "uma", "uns", "umas", "que", "se", "sua", "suas", "seu", "seus",
+        "como", "mais", "menos", "tambem", "mas", "entre", "desde", "ate",
+        # English
+        "the", "and", "or", "to", "in", "on", "for", "with", "without", "of", "a", "an", "as",
+        "is", "are", "was", "were", "be", "been", "by", "from", "at", "this", "that", "these", "those",
+    ]
+)
+
+_TOKEN_RE = re.compile(r"[a-z0-9áéíóúüñçãõâêîôûàèìòù]+", re.IGNORECASE)
+
+# Entity heuristic: sequences of 2-5 capitalized words (kept simple, multilingual-ish)
+_ENTITY_SEQ_RE = re.compile(r"\b([A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+(?:\s+[A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+){1,4})\b")
+
+
+def _norm_for_tokens(s: str) -> str:
+    t = (s or "").strip()
+    t = unicodedata.normalize("NFKD", t)
+    # keep base characters, drop combining marks
+    t = "".join(ch for ch in t if not unicodedata.combining(ch))
+    t = t.lower()
+    return t
+
+
+def _tokens_from_text(s: str) -> List[str]:
+    t = _norm_for_tokens(s)
+    toks = _TOKEN_RE.findall(t)
+    out: List[str] = []
+    for tok in toks:
+        tok = tok.strip().lower()
+        if not tok:
+            continue
+        if len(tok) <= 2:
+            continue
+        if tok in _STOPWORDS:
+            continue
+        out.append(tok)
+    return out
+
+
+def _top_keywords(article: Dict[str, Any], max_k: int = 8) -> List[str]:
+    # Use best available text
+    raw = " ".join(
+        [
+            str(article.get("title") or ""),
+            str(article.get("snippet_text") or ""),
+            str(article.get("title_en") or ""),
+            str(article.get("summary_en") or ""),
+        ]
+    )
+    toks = _tokens_from_text(raw)
+    if not toks:
+        return []
+
+    # simple frequency weighting, title gets a boost
+    title_toks = _tokens_from_text(str(article.get("title") or ""))
+    counts: Dict[str, float] = {}
+    for tok in toks:
+        counts[tok] = counts.get(tok, 0.0) + 1.0
+    for tok in title_toks:
+        counts[tok] = counts.get(tok, 0.0) + 1.5
+
+    # remove very generic news words
+    for ban in ["hoy", "ayer", "video", "fotos", "foto", "ultimas", "ultimo", "último", "últimas", "ahora", "nuevo", "nueva", "news"]:
+        b = _norm_for_tokens(ban)
+        counts.pop(b, None)
+
+    ranked = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+    out = [k for k, _v in ranked[:max_k]]
+    return out
+
+
+def _extract_entities(title: str, max_e: int = 6) -> List[str]:
+    s = (title or "").strip()
+    if not s:
+        return []
+    found = _ENTITY_SEQ_RE.findall(s)
+    # dedupe, preserve order
+    seen = set()
+    out: List[str] = []
+    for ent in found:
+        ent = ent.strip()
+        if not ent:
+            continue
+        key = ent.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        # avoid obvious junk
+        if len(ent) < 4:
+            continue
+        out.append(ent)
+        if len(out) >= max_e:
+            break
+    return out
+
+
+def _jaccard(a: List[str], b: List[str]) -> float:
+    sa = set(a or [])
+    sb = set(b or [])
+    if not sa or not sb:
+        return 0.0
+    inter = len(sa.intersection(sb))
+    union = len(sa.union(sb))
+    if union <= 0:
+        return 0.0
+    return float(inter) / float(union)
+
+
+def _cluster_bucket_key(article: Dict[str, Any]) -> str:
+    # Keep clustering conservative: per country + day bucket.
+    ck = (article.get("country_key") or "").strip().lower() or "x"
+    day = _day_bucket(article.get("published_utc"))
+    kws = _top_keywords(article, max_k=6)
+    # Stable key even if kws empty
+    kw_part = "|".join(sorted(kws))[:220]
+    raw = f"{ck}|{day}|{kw_part}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _cluster_id_v2(country_key: str, day: str, keywords: List[str], entities: List[str]) -> str:
+    ck = (country_key or "x").strip().lower()
+    dy = (day or "unknown").strip().lower()
+    kw_part = "|".join(sorted(keywords or []))[:240]
+    ent_part = "|".join((entities or [])[:2])[:120]
+    raw = f"v2|{ck}|{dy}|{kw_part}|{ent_part}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _cluster_confidence(items: List[Dict[str, Any]], rep_keywords: List[str]) -> float:
+    """
+    0..1 heuristic confidence:
+    - average similarity of members to representative keywords
+    - + boost for multiple unique sources
+    - + boost if snippets exist
+    """
+    if not items:
+        return 0.0
+
+    rep = rep_keywords or []
+    sims: List[float] = []
+    unique_sources = set()
+    snip_good = 0
+
+    for it in items:
+        unique_sources.add((it.get("source") or "").strip().lower())
+        kws = _top_keywords(it, max_k=8)
+        sims.append(_jaccard(rep, kws))
+        if len((it.get("snippet_text") or "").strip()) >= 60:
+            snip_good += 1
+
+    avg_sim = sum(sims) / float(len(sims)) if sims else 0.0
+    src_boost = min(0.20, 0.08 * max(0, len(unique_sources) - 1))
+    snip_boost = min(0.15, 0.05 * snip_good)
+
+    conf = avg_sim + src_boost + snip_boost
+    if conf < 0.0:
+        conf = 0.0
+    if conf > 1.0:
+        conf = 1.0
+    return conf
+
+
+def _cluster_items_v2(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Returns clusters with:
+    - cluster_id (v2)
+    - cluster_keywords
+    - cluster_entities
+    - cluster_confidence
+    - sources list
+    - best_item
+    """
+    # Stage 1: bucket
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for a in raw:
+        bkey = _cluster_bucket_key(a)
+        buckets.setdefault(bkey, []).append(a)
+
+    clusters_out: List[Dict[str, Any]] = []
+
+    # Stage 2: within each bucket, merge by similarity
+    sim_threshold = _env_float("CLUSTER_SIM_THRESHOLD", 0.62)
+
+    for _bkey, items in buckets.items():
+        if not items:
+            continue
+
+        # prepare per-item keywords once (cheap enough)
+        for it in items:
+            it["_kws"] = _top_keywords(it, max_k=10)
+
+        n = len(items)
+        parent = list(range(n))
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x: int, y: int) -> None:
+            rx = find(x)
+            ry = find(y)
+            if rx != ry:
+                parent[ry] = rx
+
+        # O(n^2) inside bucket, but buckets are intentionally small
+        for i in range(n):
+            for j in range(i + 1, n):
+                si = _jaccard(items[i].get("_kws") or [], items[j].get("_kws") or [])
+                if si >= float(sim_threshold):
+                    union(i, j)
+
+        groups: Dict[int, List[Dict[str, Any]]] = {}
+        for idx in range(n):
+            root = find(idx)
+            groups.setdefault(root, []).append(items[idx])
+
+        for gitems in groups.values():
+            # pick best item by quality then rank
+            best = gitems[0]
+            for it in gitems[1:]:
+                if _quality_score(it) > _quality_score(best):
+                    best = it
+                elif _quality_score(it) == _quality_score(best):
+                    if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
+                        best = it
+
+            ck = (best.get("country_key") or "").strip().lower() or "x"
+            dy = _day_bucket(best.get("published_utc"))
+            rep_keywords = _top_keywords(best, max_k=10)
+            rep_entities = _extract_entities(str(best.get("title") or ""), max_e=6)
+            cid = _cluster_id_v2(ck, dy, rep_keywords, rep_entities)
+
+            # apply cluster_id to members
+            for it in gitems:
+                it["cluster_id"] = cid
+
+            # build sources list
+            seen_sources: Dict[str, Dict[str, Any]] = {}
+            for it in gitems:
+                sname = (it.get("source") or "").strip() or "Unknown"
+                if sname not in seen_sources:
+                    seen_sources[sname] = {
+                        "source": sname,
+                        "link": it.get("link") or "",
+                        "published_utc": it.get("published_utc") or "",
+                    }
+            sources_list = list(seen_sources.values())
+
+            conf = _cluster_confidence(gitems, rep_keywords)
+
+            # persist meta (best-effort)
+            try:
+                _set_cluster_meta(cid, rep_keywords, rep_entities, conf)
+            except Exception:
+                pass
+
+            best_out = dict(best)
+            best_out["cluster_id"] = cid
+            best_out["cluster_confidence"] = conf
+            best_out["cluster_keywords"] = rep_keywords
+            best_out["cluster_entities"] = rep_entities
+
+            clusters_out.append(
+                {
+                    "cluster_id": cid,
+                    "topic": best.get("topic") or "General",
+                    "duplicates_count": len(gitems),
+                    "sources_count": len(sources_list),
+                    "sources": sources_list,
+                    "best_item": best_out,
+                    "cluster_confidence": conf,
+                    "cluster_keywords": rep_keywords,
+                    "cluster_entities": rep_entities,
+                }
+            )
+
+    return clusters_out
 
 
 # ----------------------------
@@ -1707,7 +2051,6 @@ class EnrichItem(BaseModel):
     link: str
     source: str
     snippet: str = ""
-    # optional cluster_id (frontend can/should send for clustered feeds)
     cluster_id: Optional[str] = None
 
 
@@ -1903,6 +2246,7 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
     items = _dedupe(items)
 
     for a in items:
+        # keep legacy cluster_id for /news
         a["cluster_id"] = _sig(a)
         a["topic"] = _topic_label(a)
         score, factors = _rank_score_and_factors(a)
@@ -1938,53 +2282,27 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
     scan_cap = min(3000, max(300, lim * 12))
     raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
 
-    groups: Dict[str, List[Dict[str, Any]]] = {}
-    for a in raw:
-        cid = _sig(a)
-        groups.setdefault(cid, []).append(a)
+    # rank + topic first (used by clustering best selection)
+    for it in raw:
+        it["topic"] = _topic_label(it)
+        score, factors = _rank_score_and_factors(it)
+        it["rank_score"] = score
+        it["rank_factors"] = factors
 
-    clusters: List[Dict[str, Any]] = []
-    for cid, items in groups.items():
-        for it in items:
-            it["topic"] = _topic_label(it)
-            score, factors = _rank_score_and_factors(it)
-            it["rank_score"] = score
-            it["rank_factors"] = factors
+    clusters = _cluster_items_v2(raw)
 
-        best = items[0]
-        for it in items[1:]:
-            if _quality_score(it) > _quality_score(best):
-                best = it
-            elif _quality_score(it) == _quality_score(best):
-                if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
-                    best = it
+    # Read-through cluster enrichment cache for best_item
+    for cobj in clusters:
+        cid = (cobj.get("cluster_id") or "").strip()
+        best = cobj.get("best_item")
+        if not isinstance(best, dict):
+            continue
 
-        seen_sources: Dict[str, Dict[str, Any]] = {}
-        for it in items:
-            sname = (it.get("source") or "").strip() or "Unknown"
-            if sname not in seen_sources:
-                seen_sources[sname] = {
-                    "source": sname,
-                    "link": it.get("link") or "",
-                    "published_utc": it.get("published_utc") or "",
-                }
-
-        sources_list = list(seen_sources.values())
-        cluster_topic = best.get("topic") or GENERAL_LABEL
-
-        best_out = dict(best)
-        best_out["cluster_id"] = cid
-
-        clusters.append(
-            {
-                "cluster_id": cid,
-                "topic": cluster_topic,
-                "duplicates_count": len(items),
-                "sources_count": len(sources_list),
-                "sources": sources_list,
-                "best_item": best_out,
-            }
-        )
+        cached_cluster = _get_fresh_cluster_enrich(cid)
+        if cached_cluster:
+            best["title_en"] = cached_cluster.get("title_en") or ""
+            best["summary_en"] = cached_cluster.get("summary_en") or ""
+            best["has_cached_summary"] = True
 
     clusters.sort(
         key=lambda cobj: (
@@ -2006,6 +2324,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     Includes:
     - SQLite TTL cache for the whole /top response
     - cluster_enrich_cache injection (NOW also applies to cached payloads)
+    - Smarter clustering v2 with confidence/keywords/entities
     """
     c = (country or "uy").strip().lower()
 
@@ -2020,10 +2339,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     cached = _top_cache_get(cache_key)
     if cached:
         payload, age_s = cached
-
-        # Key improvement: inject cluster cache even when /top payload comes from SQLite cache
         _inject_cluster_cache_into_payload(payload)
-
         payload["cache_hit"] = True
         payload["cache_age_s"] = age_s
         payload["cache_ttl_s"] = _top_ttl_s()
@@ -2032,60 +2348,25 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     scan_cap = min(3000, max(300, lim * 14))
     raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
 
-    groups: Dict[str, List[Dict[str, Any]]] = {}
-    for a in raw:
-        cid = _sig(a)
-        groups.setdefault(cid, []).append(a)
+    for it in raw:
+        it["topic"] = _topic_label(it)
+        score, factors = _rank_score_and_factors(it)
+        it["rank_score"] = score
+        it["rank_factors"] = factors
 
-    clusters: List[Dict[str, Any]] = []
-    for cid, items in groups.items():
-        for it in items:
-            it["topic"] = _topic_label(it)
-            score, factors = _rank_score_and_factors(it)
-            it["rank_score"] = score
-            it["rank_factors"] = factors
+    clusters = _cluster_items_v2(raw)
 
-        best = items[0]
-        for it in items[1:]:
-            if _quality_score(it) > _quality_score(best):
-                best = it
-            elif _quality_score(it) == _quality_score(best):
-                if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
-                    best = it
-
-        # Read-through cluster enrichment cache if available (fresh only)
+    # Read-through cluster enrichment cache if available (fresh only)
+    for cobj in clusters:
+        cid = (cobj.get("cluster_id") or "").strip()
+        best = cobj.get("best_item")
+        if not isinstance(best, dict):
+            continue
         cached_cluster = _get_fresh_cluster_enrich(cid)
         if cached_cluster:
             best["title_en"] = cached_cluster.get("title_en") or ""
             best["summary_en"] = cached_cluster.get("summary_en") or ""
             best["has_cached_summary"] = True
-
-        seen_sources: Dict[str, Dict[str, Any]] = {}
-        for it in items:
-            sname = (it.get("source") or "").strip() or "Unknown"
-            if sname not in seen_sources:
-                seen_sources[sname] = {
-                    "source": sname,
-                    "link": it.get("link") or "",
-                    "published_utc": it.get("published_utc") or "",
-                }
-
-        sources_list = list(seen_sources.values())
-        cluster_topic = best.get("topic") or GENERAL_LABEL
-
-        best_out = dict(best)
-        best_out["cluster_id"] = cid
-
-        clusters.append(
-            {
-                "cluster_id": cid,
-                "topic": cluster_topic,
-                "duplicates_count": len(items),
-                "sources_count": len(sources_list),
-                "sources": sources_list,
-                "best_item": best_out,
-            }
-        )
 
     clusters.sort(
         key=lambda cobj: (
@@ -2126,14 +2407,12 @@ def enrich_items(req: EnrichRequest, request: Request):
         link = (it.link or "").strip()
         cid = (it.cluster_id or "").strip()
 
-        # 1) Cluster cache fast-path (cheapest + aligns with clusters)
         if cid:
             cc = _get_fresh_cluster_enrich(cid)
             if cc:
                 title_en = cc.get("title_en") or ""
                 summary_en = cc.get("summary_en") or ""
 
-                # Also write link cache (best-effort) so /news items benefit too
                 if link and title_en and summary_en:
                     try:
                         _set_cached_enrich(link, title_en, summary_en)
@@ -2150,7 +2429,6 @@ def enrich_items(req: EnrichRequest, request: Request):
                 )
                 continue
 
-        # 2) Link cache
         if link:
             cached = _get_cached_enrich(link)
             if cached and cached.get("summary_en"):
@@ -2164,7 +2442,6 @@ def enrich_items(req: EnrichRequest, request: Request):
                 )
                 continue
 
-        # 3) Needs OpenAI
         to_do.append(it)
 
     if not to_do:
@@ -2211,7 +2488,6 @@ def enrich_items(req: EnrichRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Enrichment failed: {e}")
 
-    # Build quick lookup for cluster_id by link from request items
     link_to_cid: Dict[str, str] = {}
     for it in req.items:
         lnk = (it.link or "").strip()
@@ -2279,7 +2555,6 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
         if cid:
             cc = _get_fresh_cluster_enrich(cid)
             if cc:
-                # best-effort write link cache too
                 try:
                     if link and cc.get("title_en") and cc.get("summary_en"):
                         _set_cached_enrich(link, cc.get("title_en") or "", cc.get("summary_en") or "")
@@ -2287,7 +2562,6 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
                     pass
                 continue
 
-        # Also skip if link cache already exists (helps if cluster_id missing)
         if link:
             cached = _get_cached_enrich(link)
             if cached and cached.get("summary_en"):
@@ -2418,7 +2692,7 @@ def _worker_loop() -> None:
             "batch_size": batch_size,
             "enriched_count": 0,
             "buckets": {},
-            "mode": "cluster",
+            "mode": "cluster_v2",
         }
 
         try:
@@ -2441,7 +2715,6 @@ def _worker_loop() -> None:
                     items = _collect_items(country=c, range=r, q="", scan_cap=scan_cap)
                     items = _dedupe(items)
 
-                    # label + rank
                     for a in items:
                         a["topic"] = _topic_label(a)
                         score, _factors = _rank_score_and_factors(a)
@@ -2452,42 +2725,29 @@ def _worker_loop() -> None:
                         reverse=True,
                     )
 
-                    # Build clusters (same signature method)
-                    groups: Dict[str, List[Dict[str, Any]]] = {}
-                    for a in items[: max(50, effective_scan_limit * 3)]:
-                        cid = _sig(a)
-                        groups.setdefault(cid, []).append(a)
-
-                    # Pick best item per cluster (quality/rank)
-                    clusters_best: List[Tuple[str, Dict[str, Any]]] = []
-                    for cid, gitems in groups.items():
-                        best = gitems[0]
-                        for it in gitems[1:]:
-                            if _quality_score(it) > _quality_score(best):
-                                best = it
-                            elif _quality_score(it) == _quality_score(best):
-                                if float(it.get("rank_score") or 0.0) > float(best.get("rank_score") or 0.0):
-                                    best = it
-                        clusters_best.append((cid, best))
-
-                    # Sort clusters by the best item's rank score
-                    clusters_best.sort(
-                        key=lambda t: (float((t[1].get("rank_score") or 0.0)), (t[1].get("published_utc") or "")),
+                    # Build clusters using v2
+                    clusters = _cluster_items_v2(items[: max(80, effective_scan_limit * 4)])
+                    clusters.sort(
+                        key=lambda cobj: (
+                            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
+                            ((cobj.get("best_item") or {}).get("published_utc") or ""),
+                        ),
                         reverse=True,
                     )
-
-                    top_clusters = clusters_best[: int(effective_scan_limit)]
+                    top_clusters = clusters[: int(effective_scan_limit)]
                     bucket_scanned = len(top_clusters)
 
                     candidates: List[Dict[str, str]] = []
-                    for cid, best in top_clusters:
-                        # If cluster cache exists (fresh), skip
-                        if _get_fresh_cluster_enrich(cid):
+                    for cobj in top_clusters:
+                        cid = (cobj.get("cluster_id") or "").strip()
+                        best = cobj.get("best_item") or {}
+                        link = (best.get("link") or "").strip()
+
+                        if cid and _get_fresh_cluster_enrich(cid):
                             bucket_cached += 1
                             continue
 
-                        # If best already has English (link cache may have filled it), treat as cached too
-                        if (best.get("title_en") and best.get("summary_en")):
+                        if best.get("title_en") and best.get("summary_en"):
                             bucket_cached += 1
                             continue
 
@@ -2495,7 +2755,7 @@ def _worker_loop() -> None:
                             {
                                 "cluster_id": cid,
                                 "title": best.get("title") or "",
-                                "link": best.get("link") or "",
+                                "link": link,
                                 "source": best.get("source") or "",
                                 "snippet": best.get("snippet_text") or "",
                             }
