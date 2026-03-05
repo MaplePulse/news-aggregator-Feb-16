@@ -824,6 +824,68 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     if not c:
         return None
 
+    # ----------------------------
+    # High-impact "World/Conflict" mappings
+    # Handles categories like: "Conflicto en Medio Oriente"
+    # ----------------------------
+    if any(x in c for x in ["conflicto", "guerra", "invasion", "invasión", "tension", "tensión"]):
+        if any(
+            x in c
+            for x in [
+                "medio oriente",
+                "oriente medio",
+                "israel",
+                "gaza",
+                "palest",
+                "iran",
+                "irán",
+                "teheran",
+                "teherán",
+                "ucrania",
+                "rusia",
+                "otan",
+                "onu",
+                "china",
+                "eeuu",
+                "estados unidos",
+                "union europea",
+                "unión europea",
+            ]
+        ):
+            return "World"
+        return "World"
+
+    if any(
+        x in c
+        for x in [
+            "medio oriente",
+            "oriente medio",
+            "israel",
+            "gaza",
+            "palest",
+            "iran",
+            "irán",
+            "ucrania",
+            "rusia",
+            "onu",
+            "otan",
+            "union europea",
+            "unión europea",
+            "eeuu",
+            "estados unidos",
+        ]
+    ):
+        return "World"
+
+    # ----------------------------
+    # Environment / Weather mappings
+    # ----------------------------
+    if any(x in c for x in ["clima", "meteorolog", "meteorologí", "tiempo", "pronostico", "pronóstico", "inumet"]):
+        return "Environment"
+
+    # ----------------------------
+    # Original mappings
+    # ----------------------------
     if any(
         x in c
         for x in [
@@ -1125,7 +1187,9 @@ _STOPWORDS = set(
 _TOKEN_RE = re.compile(r"[a-z0-9áéíóúüñçãõâêîôûàèìòù]+", re.IGNORECASE)
 
 # Entity heuristic: sequences of 2-5 capitalized words
-_ENTITY_SEQ_RE = re.compile(r"\b([A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+(?:\s+[A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+){1,4})\b")
+_ENTITY_SEQ_RE = re.compile(
+    r"\b([A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+(?:\s+[A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+){1,4})\b"
+)
 
 
 def _norm_for_tokens(s: str) -> str:
@@ -1346,7 +1410,6 @@ def _cluster_items_v2(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             best_out["cluster_keywords"] = rep_keywords
             best_out["cluster_entities"] = rep_entities
 
-            # ✅ IMPORTANT: remove internal fields from best_out before it goes to the API
             best_out = _strip_internal_fields(best_out)
 
             clusters_out.append(
@@ -2285,7 +2348,6 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
             best["summary_en"] = cached_cluster.get("summary_en") or ""
             best["has_cached_summary"] = True
 
-        # sanitize any internal fields (defensive)
         cobj["best_item"] = _strip_internal_fields(best)
 
     clusters.sort(
@@ -2333,7 +2395,6 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
         payload["cache_age_s"] = age_s
         payload["cache_ttl_s"] = _top_ttl_s()
 
-        # ✅ sanitize cached payload too
         payload = _strip_internal_fields(payload)
         return payload
 
