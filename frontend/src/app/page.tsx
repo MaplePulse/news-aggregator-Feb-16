@@ -22,7 +22,6 @@ type Article = {
   duplicates_count?: number | null;
   rank_score?: number | null;
 
-  // explainable ranking fields from backend (optional)
   rank_factors?: any;
 
   source_categories?: string[] | null;
@@ -103,7 +102,6 @@ function initials(source: string) {
   return parts.map((p) => p[0]?.toUpperCase()).join("");
 }
 
-// Curated clustered feed size
 function topLimitForCountry(country: CountryOption["key"]) {
   if (country === "all") return 30;
   return 25;
@@ -116,7 +114,6 @@ function applyTheme(theme: "dark" | "light") {
   else root.classList.remove("dark");
 }
 
-// UI: show UTC without seconds
 function formatPublishedUTC(a: Article) {
   const iso = (a.published_utc || "").trim();
   if (!iso) return a.published || "";
@@ -131,7 +128,16 @@ function formatPublishedUTC(a: Article) {
   return `${yyyy}-${mm}-${dd} ${hh}:${min} UTC`;
 }
 
-// Minimal type for the PWA install prompt event
+function ageHoursFromUTC(iso?: string | null) {
+  const s = (iso || "").trim();
+  if (!s) return null;
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return null;
+  const now = Date.now();
+  const diffMs = Math.max(0, now - t);
+  return diffMs / 3600000;
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -234,9 +240,6 @@ export default function Home() {
   }
 
   function performSearchAction() {
-    // Search is already “live” while typing. This just improves UX:
-    // - scroll to top so users see the first matches
-    // - blur input to close mobile keyboard
     try {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {}
@@ -262,10 +265,7 @@ export default function Home() {
       const data = await safeJson(res);
 
       if (!res.ok) {
-        const msg =
-          (data?.error as string) ||
-          (data?.detail as string) ||
-          "We couldn’t load headlines right now.";
+        const msg = (data?.error as string) || (data?.detail as string) || "We couldn’t load headlines right now.";
         setClusters([]);
         setLoadError({ message: msg, status: res.status });
       } else {
@@ -276,7 +276,7 @@ export default function Home() {
         queueRef.current = [];
         setEnrichState({});
       }
-    } catch (e: any) {
+    } catch {
       setClusters([]);
       setLoadError({ message: "We couldn’t load headlines right now.", status: 0 });
     } finally {
@@ -519,13 +519,30 @@ export default function Home() {
 
     return list.filter((c) => {
       const a = c.best_item;
-      const hay = [a.title_en, a.summary_en, a.title, a.snippet_text, a.source, c.topic]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const hay = [a.title_en, a.summary_en, a.source, c.topic].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(normalizedQuery);
     });
   }, [clusters, query, category]);
+
+  const mostReportedSet = useMemo(() => {
+    const list = [...filteredClusters];
+    list.sort((a, b) => {
+      const as = Number(a.sources_count || 0);
+      const bs = Number(b.sources_count || 0);
+      if (bs !== as) return bs - as;
+
+      const ad = Number(a.duplicates_count || 0);
+      const bd = Number(b.duplicates_count || 0);
+      if (bd !== ad) return bd - ad;
+
+      const ap = Date.parse(a.best_item.published_utc || "") || 0;
+      const bp = Date.parse(b.best_item.published_utc || "") || 0;
+      return bp - ap;
+    });
+
+    const top = list.slice(0, Math.min(3, list.length)).map((c) => c.cluster_id);
+    return new Set(top);
+  }, [filteredClusters]);
 
   const missingCount = useMemo(() => {
     const list = clusters.map((c) => c.best_item);
@@ -550,20 +567,20 @@ export default function Home() {
   const installButtonLabel = installEvent ? "Install" : "Add to Home";
 
   return (
-    <main className="p-8 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between gap-4 mb-8">
-        <div>
-          <h1 className="font-extrabold leading-tight tracking-tight text-5xl sm:text-6xl">
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:p-8 overflow-x-hidden">
+      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-extrabold leading-tight tracking-tight text-5xl sm:text-6xl break-words">
             <span className="text-blue-500">Mercosur</span> News
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">Your Source for Regional Information</p>
+          <p className="mt-2 max-w-md text-sm text-gray-600 dark:text-gray-400 sm:text-base">Your Source for Regional Information</p>
         </div>
 
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex flex-wrap items-center gap-2 sm:mt-2 sm:justify-end">
           <button
             onClick={() => setInfoOpen(true)}
             aria-label="Info"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-500 text-sm transition bg-transparent text-blue-500 hover:text-blue-400"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-500 text-sm transition bg-transparent text-blue-500 hover:text-blue-400"
           >
             <span className="italic font-semibold">i</span>
           </button>
@@ -571,7 +588,7 @@ export default function Home() {
           {!standalone ? (
             <button
               onClick={handleInstallClick}
-              className="inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-transparent text-black dark:text-white hover:opacity-90"
+              className="inline-flex min-h-10 items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-transparent text-black dark:text-white hover:opacity-90"
               title="Add this app to your home screen"
             >
               {installButtonLabel}
@@ -580,25 +597,24 @@ export default function Home() {
 
           <button
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            className="inline-flex items-center rounded-full border border-gray-500 px-3 py-1.5 text-xs transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90"
+            className="inline-flex min-h-10 items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90"
           >
             {mounted ? (theme === "dark" ? "Light mode" : "Dark mode") : "Theme"}
           </button>
         </div>
       </div>
 
-      <hr className="border-gray-200 dark:border-gray-800 mb-10" />
+      <hr className="mb-10 border-gray-200 dark:border-gray-800" />
 
-      <div className="flex items-baseline justify-between gap-4 mb-6">
+      <div className="mb-6 flex items-baseline justify-between gap-4">
         <h2 className="text-3xl font-bold">{selectedCountryName} News</h2>
-        <span className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm whitespace-nowrap">
+        <span className="whitespace-nowrap text-xs text-gray-600 dark:text-gray-400 sm:text-sm">
           {loading ? "Loading…" : enriching ? "Enriching…" : missingCount > 0 ? "" : ""}
         </span>
       </div>
 
-      {/* Product-ish banner */}
       {loadError ? (
-        <div className="mb-6 rounded border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-white/5 p-4">
+        <div className="mb-6 rounded border border-gray-300 bg-gray-50 p-4 dark:border-gray-700 dark:bg-white/5">
           <div className="flex items-start justify-between gap-3">
             <div className="text-sm text-gray-800 dark:text-white/80">
               <div className="font-semibold">Service temporarily unavailable</div>
@@ -611,7 +627,7 @@ export default function Home() {
             </div>
             <button
               onClick={() => loadTopStories(range, country)}
-              className="inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90 whitespace-nowrap"
+              className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-500 bg-black px-4 py-2 text-sm text-white transition hover:opacity-90 dark:bg-white dark:text-black"
             >
               Retry
             </button>
@@ -619,10 +635,9 @@ export default function Home() {
         </div>
       ) : null}
 
-      {/* Controls row */}
       <div className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-12 md:items-end">
         <div className="md:col-span-3">
-          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Date Range</label>
+          <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Date Range</label>
           <select
             value={range}
             onChange={(e) => {
@@ -630,7 +645,7 @@ export default function Home() {
               setRange(val);
               loadTopStories(val, country);
             }}
-            className="w-full h-10 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 text-black dark:text-white px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="h-10 w-full rounded border border-gray-300 bg-white px-3 text-black focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
           >
             <option value="24h">Last 24 Hours</option>
             <option value="3d">Last 3 Days</option>
@@ -640,7 +655,7 @@ export default function Home() {
         </div>
 
         <div className="md:col-span-3">
-          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Select Country</label>
+          <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Select Country</label>
           <select
             value={country}
             onChange={(e) => {
@@ -648,7 +663,7 @@ export default function Home() {
               setCountry(val);
               loadTopStories(range, val);
             }}
-            className="w-full h-10 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 text-black dark:text-white px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="h-10 w-full rounded border border-gray-300 bg-white px-3 text-black focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
           >
             {MERCOSUR_COUNTRIES.map((c) => (
               <option key={c.key} value={c.key}>
@@ -659,11 +674,11 @@ export default function Home() {
         </div>
 
         <div className="md:col-span-3">
-          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Category</label>
+          <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Category</label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as CategoryFilter)}
-            className="w-full h-10 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-900 text-black dark:text-white px-3 rounded focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="h-10 w-full rounded border border-gray-300 bg-white px-3 text-black focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-500 dark:bg-gray-900 dark:text-white"
           >
             <option value="all">All categories</option>
             {categoryOptions.map((c) => (
@@ -675,12 +690,12 @@ export default function Home() {
         </div>
 
         <div className="md:col-span-3">
-          <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">Search</label>
+          <label className="mb-1 block text-sm text-gray-700 dark:text-gray-300">Search</label>
           <div className="flex items-center gap-3">
             <input
               ref={searchInputRef}
-              className="h-10 w-full text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-black dark:text-white px-3 rounded placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
-              placeholder={"Headlines & summaries"}
+              className="h-10 w-full min-w-0 rounded border border-gray-300 bg-white px-3 text-xs text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+              placeholder="Headlines & summaries"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -692,7 +707,7 @@ export default function Home() {
             />
 
             <button
-              className="h-10 bg-black text-white dark:bg-white dark:text-black px-4 rounded border border-gray-300 hover:opacity-90 whitespace-nowrap shrink-0"
+              className="h-10 shrink-0 rounded border border-gray-300 bg-black px-4 text-white hover:opacity-90 dark:bg-white dark:text-black"
               onClick={performSearchAction}
               title="Search (filters as you type)"
             >
@@ -714,6 +729,7 @@ export default function Home() {
 
           const titleReady = !!(a.title_en && a.title_en.trim());
           const summaryReady = !!(a.summary_en && a.summary_en.trim());
+          const translatedReady = titleReady && summaryReady;
 
           const topic = normalizeTopic(a.topic || c.topic);
           const multiSource = (c.sources_count || 0) > 1;
@@ -722,6 +738,18 @@ export default function Home() {
           const st = enrichState[link]?.status || "idle";
           const errMsg = enrichState[link]?.message || "Summary unavailable.";
 
+          const isMostReported = mostReportedSet.has(c.cluster_id);
+
+          const ageH = ageHoursFromUTC(a.published_utc);
+          const sourcesCount = Number(c.sources_count || 0);
+          const reportsCount = Number(c.duplicates_count || 0);
+
+          const isTrending =
+            (ageH !== null && ageH <= 6 && sourcesCount >= 3) ||
+            (ageH !== null && ageH <= 6 && reportsCount >= 4);
+
+          const showTranslatingState = !translatedReady && st !== "error";
+
           return (
             <div
               key={c.cluster_id}
@@ -729,27 +757,13 @@ export default function Home() {
                 cardRefs.current[a.link] = el;
               }}
               data-link={a.link}
-              className="relative border border-gray-200 dark:border-gray-700 rounded p-5 bg-white dark:bg-transparent"
+              className={`rounded border p-5 transition ${
+                translatedReady
+                  ? "border-gray-200 bg-white dark:border-gray-700 dark:bg-transparent"
+                  : "border-gray-200 bg-gray-50/70 opacity-70 dark:border-gray-800 dark:bg-white/[0.03]"
+              }`}
             >
-              <div className="absolute top-3 right-3 flex items-center gap-2">
-                {multiSource ? (
-                  <span
-                    title="Multiple sources"
-                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-white/80"
-                    aria-label="Multiple sources"
-                  >
-                    <MultiSourceIcon />
-                  </span>
-                ) : null}
-
-                {topic ? (
-                  <span className="text-[11px] px-2 py-1 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-white/80">
-                    {topic}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-3 flex items-center gap-2">
                 {a.country_flag_url ? <img src={a.country_flag_url} alt="Flag" className="h-4 w-auto rounded-sm" /> : null}
 
                 {showLogo ? (
@@ -763,50 +777,121 @@ export default function Home() {
                     }}
                   />
                 ) : (
-                  <span className="inline-flex h-5 min-w-5 px-1 items-center justify-center rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-[11px] border border-gray-200 dark:border-gray-700">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-gray-200 bg-gray-100 px-1 text-[11px] text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                     {initials(a.source)}
                   </span>
                 )}
 
-                <span className="text-sm text-gray-600 dark:text-gray-400">{a.source}</span>
+                <span className="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">{a.source}</span>
               </div>
 
-              {titleReady ? (
-                <h3 className="font-semibold text-lg">{a.title_en}</h3>
-              ) : (
-                <h3 className="font-semibold text-lg text-gray-900 dark:text-white/90">{a.title}</h3>
-              )}
-
-              {summaryReady ? (
-                <p className="mt-2 text-gray-800 dark:text-white/80">{a.summary_en}</p>
-              ) : st === "error" ? (
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{errMsg}</p>
-                  <button
-                    onClick={() => retryEnrich(a.link)}
-                    className="inline-flex items-center rounded-full border border-gray-500 px-3 py-1.5 text-xs transition bg-transparent text-black dark:text-white hover:opacity-90 whitespace-nowrap"
-                    aria-label="Retry summary enrichment"
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {isMostReported ? (
+                  <span
+                    title="Most reported in this view"
+                    className="rounded-full border border-gray-200 bg-gray-900 px-2 py-1 text-[10px] text-white dark:border-gray-700 dark:bg-white dark:text-black"
                   >
-                    Retry
-                  </button>
-                </div>
-              ) : st === "loading" ? (
-                <div className="mt-3 space-y-2 animate-pulse">
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-4/6" />
-                </div>
+                    MOST REPORTED
+                  </span>
+                ) : null}
+
+                {isTrending ? (
+                  <span
+                    title="Trending right now"
+                    className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-white/80"
+                  >
+                    TRENDING ↑
+                  </span>
+                ) : null}
+
+                {multiSource ? (
+                  <span
+                    title="Multiple sources"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-white/80"
+                    aria-label="Multiple sources"
+                  >
+                    <MultiSourceIcon />
+                  </span>
+                ) : null}
+
+                {topic ? (
+                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-white/80">
+                    {topic}
+                  </span>
+                ) : null}
+              </div>
+
+              {translatedReady ? (
+                <>
+                  <h3 className="text-lg font-semibold">{a.title_en}</h3>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600 dark:text-gray-400">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-medium text-gray-700 dark:text-white/80">{sourcesCount}</span> sources
+                    </span>
+                    <span className="opacity-60">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-medium text-gray-700 dark:text-white/80">{reportsCount}</span> reports
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-gray-800 dark:text-white/80">{a.summary_en}</p>
+                </>
+              ) : st === "error" ? (
+                <>
+                  <div className="mb-2 h-6 w-40 rounded bg-gray-200 dark:bg-gray-700" />
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600 dark:text-gray-400">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-medium text-gray-700 dark:text-white/80">{sourcesCount}</span> sources
+                    </span>
+                    <span className="opacity-60">·</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="font-medium text-gray-700 dark:text-white/80">{reportsCount}</span> reports
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{errMsg}</p>
+                    <button
+                      onClick={() => retryEnrich(a.link)}
+                      className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-500 px-3 py-1.5 text-xs transition bg-transparent text-black hover:opacity-90 dark:text-white"
+                      aria-label="Retry summary enrichment"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </>
               ) : (
-                <div className="mt-3 space-y-2 animate-pulse">
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
-                  <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-4/6" />
-                </div>
+                <>
+                  <div className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {showTranslatingState ? "Translating…" : ""}
+                  </div>
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-6 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="flex flex-wrap items-center gap-2 text-[12px] text-gray-600 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="font-medium text-gray-700 dark:text-white/80">{sourcesCount}</span> sources
+                      </span>
+                      <span className="opacity-60">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="font-medium text-gray-700 dark:text-white/80">{reportsCount}</span> reports
+                      </span>
+                    </div>
+                    <div className="h-3 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-3 w-4/6 rounded bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                </>
               )}
 
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{formatPublishedUTC(a)}</p>
+              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{formatPublishedUTC(a)}</p>
 
               <button
                 onClick={() => openTranslated(a.link)}
-                className="mt-4 inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90"
+                disabled={!translatedReady}
+                className={`mt-4 inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition ${
+                  translatedReady
+                    ? "bg-black text-white hover:opacity-90 dark:bg-white dark:text-black"
+                    : "cursor-not-allowed bg-gray-300 text-gray-600 dark:bg-gray-800 dark:text-gray-500"
+                }`}
               >
                 Open Translated Article →
               </button>
@@ -815,33 +900,31 @@ export default function Home() {
         })}
       </div>
 
-      {/* Info Modal */}
       {infoOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button className="absolute inset-0 bg-black/60" aria-label="Close" onClick={() => setInfoOpen(false)} />
-          <div className="relative w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-black p-5">
+          <div className="relative max-h-[85vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto overflow-x-hidden rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-black">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold">About Mercosur News</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <div className="min-w-0">
+                <h3 className="break-words text-lg font-semibold">About Mercosur News</h3>
+                <p className="mt-1 break-words text-sm text-gray-600 dark:text-gray-400">
                   RSS headlines across Mercosur, translated to English with short summaries.
                 </p>
               </div>
 
               <button
                 onClick={() => setInfoOpen(false)}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:opacity-90"
+                className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs hover:opacity-90 dark:border-gray-700"
                 aria-label="Close modal"
               >
                 Close
               </button>
             </div>
 
-            <div className="mt-4 space-y-4 text-sm">
+            <div className="mt-4 space-y-4 break-words text-sm leading-relaxed overflow-x-hidden">
               <div className="text-gray-800 dark:text-white/80">
                 <p>
-                  Mercosur News aggregates public RSS headlines across the Mercosur region and presents them in a clean,
-                  readable feed.
+                  Mercosur News aggregates public RSS headlines across the Mercosur region and presents them in a clean, readable feed.
                 </p>
                 <p className="mt-2">
                   As you scroll, headlines are translated into English and paired with short English summaries. You can open any source
@@ -849,9 +932,9 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+              <div className="border-t border-gray-200 pt-4 dark:border-gray-800">
                 <div className="font-semibold text-gray-900 dark:text-white">How to use</div>
-                <ul className="mt-2 list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-400">
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-gray-600 dark:text-gray-400">
                   <li>
                     <span className="text-gray-800 dark:text-white/80">Date Range:</span> filter by recency.
                   </li>
@@ -867,17 +950,17 @@ export default function Home() {
                 </ul>
               </div>
 
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+              <div className="border-t border-gray-200 pt-4 dark:border-gray-800">
                 <div className="font-semibold text-gray-900 dark:text-white">Add to Home Screen</div>
 
                 {standalone ? (
                   <div className="mt-2 text-gray-600 dark:text-gray-400">You’re already running Mercosur News in installed mode.</div>
                 ) : installEvent ? (
-                  <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-gray-600 dark:text-gray-400">Your browser supports installing this app.</div>
                     <button
                       onClick={handleInstallClick}
-                      className="inline-flex items-center rounded-full border border-gray-500 px-4 py-2 text-sm transition bg-black text-white dark:bg-white dark:text-black hover:opacity-90 whitespace-nowrap"
+                      className="inline-flex items-center justify-center rounded-full border border-gray-500 bg-black px-4 py-2 text-sm text-white transition hover:opacity-90 dark:bg-white dark:text-black"
                     >
                       Install
                     </button>
@@ -893,7 +976,7 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
+              <div className="border-t border-gray-200 pt-4 dark:border-gray-800">
                 <div className="font-semibold text-gray-900 dark:text-white">Notes</div>
                 <p className="mt-2 text-gray-600 dark:text-gray-400">
                   Topics are automatically labeled. Translation and summarization are generated as stories enter view to keep the feed
