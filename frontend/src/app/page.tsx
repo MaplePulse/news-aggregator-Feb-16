@@ -141,6 +141,15 @@ function storyCountLabel(count: number) {
   return `${count} ${count === 1 ? "story" : "stories"}`;
 }
 
+function freshnessLabel(ageS: number | null) {
+  if (ageS === null || Number.isNaN(ageS)) return "";
+  if (ageS < 30) return "Updated just now";
+  if (ageS < 90) return "Updated 1 minute ago";
+  if (ageS < 3600) return `Updated ${Math.floor(ageS / 60)} minutes ago`;
+  if (ageS < 7200) return "Updated 1 hour ago";
+  return `Updated ${Math.floor(ageS / 3600)} hours ago`;
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -212,6 +221,7 @@ export default function Home() {
   const [ios, setIos] = useState(false);
 
   const [loadError, setLoadError] = useState<LoadError>(null);
+  const [freshnessAgeS, setFreshnessAgeS] = useState<number | null>(null);
 
   const [enrichState, setEnrichState] = useState<Record<string, EnrichState>>({});
 
@@ -286,10 +296,14 @@ export default function Home() {
 
       if (!res.ok) {
         setClusters([]);
+        setFreshnessAgeS(null);
         setLoadError({ message: "We couldn’t load headlines right now.", status: res.status });
       } else {
         const list: Cluster[] = (data?.clusters || []) as Cluster[];
         setClusters(list);
+
+        const age = typeof data?.cache_age_s === "number" ? data.cache_age_s : 0;
+        setFreshnessAgeS(age);
 
         queuedRef.current.clear();
         queueRef.current = [];
@@ -297,6 +311,7 @@ export default function Home() {
       }
     } catch {
       setClusters([]);
+      setFreshnessAgeS(null);
       setLoadError({ message: "We couldn’t load headlines right now.", status: 0 });
     } finally {
       setLoading(false);
@@ -633,6 +648,7 @@ export default function Home() {
   const hasActiveCategory = category !== "all";
   const showEmptyState = !loading && !loadError && clusters.length > 0 && filteredClusters.length === 0;
   const showClearFilters = showEmptyState && (hasActiveSearch || hasActiveCategory);
+  const freshnessText = !loadError ? freshnessLabel(freshnessAgeS) : "";
 
   async function handleInstallClick() {
     if (standalone) return;
@@ -695,7 +711,10 @@ export default function Home() {
         <div className="min-w-0">
           <h2 className="text-3xl font-bold">{selectedCountryName} News</h2>
           {!loading && !loadError ? (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{storyCountLabel(filteredClusters.length)}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
+              <span>{storyCountLabel(filteredClusters.length)}</span>
+              {freshnessText ? <span>{freshnessText}</span> : null}
+            </div>
           ) : null}
         </div>
       </div>
