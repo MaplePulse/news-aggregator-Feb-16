@@ -2264,7 +2264,7 @@ def _collect_items(country: str, range: str, q: str, scan_cap: int = 999999) -> 
 def _hard_cap_limit(country_key: str, lim: int) -> int:
     c = (country_key or "").strip().lower()
     if c == "all":
-        return max(1, min(lim, 60))
+        return max(1, min(lim, 200))
     return max(1, min(lim, 200))
 
 
