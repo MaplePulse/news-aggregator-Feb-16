@@ -57,6 +57,7 @@ const MERCOSUR_COUNTRIES: CountryOption[] = [
 const ENRICH_BATCH_SIZE = 3;
 const PRIORITY_ENRICH_COUNT = 5;
 const OBSERVER_ROOT_MARGIN = "900px";
+const GENERIC_ENRICH_ERROR = "Service temporarily unavailable. Please try again later.";
 
 const UNCATEGORIZED = "General";
 
@@ -277,9 +278,8 @@ export default function Home() {
       const data = await safeJson(res);
 
       if (!res.ok) {
-        const msg = (data?.error as string) || (data?.detail as string) || "We couldn’t load headlines right now.";
         setClusters([]);
-        setLoadError({ message: msg, status: res.status });
+        setLoadError({ message: "We couldn’t load headlines right now.", status: res.status });
       } else {
         const list: Cluster[] = (data?.clusters || []) as Cluster[];
         setClusters(list);
@@ -327,13 +327,13 @@ export default function Home() {
     });
   }
 
-  function markBatchError(links: string[], message?: string) {
+  function markBatchError(links: string[], message = GENERIC_ENRICH_ERROR) {
     setEnrichState((prev) => {
       const next = { ...prev };
       for (const link of links) {
         const cur = next[link];
         if (cur?.status === "ok") continue;
-        next[link] = { status: "error", message: message || "Summary unavailable." };
+        next[link] = { status: "error", message };
       }
       return next;
     });
@@ -361,42 +361,41 @@ export default function Home() {
     const batchLinks = batch.map((b) => String(b.link || "").trim()).filter(Boolean);
     markBatchLoading(batchLinks);
 
-    const res = await fetch("/api/enrich", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: batch }),
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: batch }),
+        cache: "no-store",
+      });
 
-    const data = await safeJson(res);
-    const enriched = (data?.items || data?.backend_response?.items || []) as any[];
+      const data = await safeJson(res);
+      const enriched = (data?.items || data?.backend_response?.items || []) as any[];
 
-    if (!res.ok) {
-      const msg =
-        (data?.error as string) ||
-        (data?.backend_response?.detail as string) ||
-        (data?.backend_response?.error as string) ||
-        "Summary unavailable.";
-      markBatchError(batchLinks, msg);
-      return;
-    }
-
-    const got = new Set<string>();
-    for (const e of enriched) {
-      const link = (e?.link || "").trim();
-      if (!link) continue;
-
-      const t = (e?.title_en || "").trim();
-      const s = (e?.summary_en || "").trim();
-
-      if (t && s) {
-        applyEnrichedToState(link, t, s);
-        got.add(link);
+      if (!res.ok) {
+        markBatchError(batchLinks);
+        return;
       }
-    }
 
-    const missed = batchLinks.filter((l) => !got.has(l));
-    if (missed.length > 0) markBatchError(missed, "Summary unavailable.");
+      const got = new Set<string>();
+      for (const e of enriched) {
+        const link = (e?.link || "").trim();
+        if (!link) continue;
+
+        const t = (e?.title_en || "").trim();
+        const s = (e?.summary_en || "").trim();
+
+        if (t && s) {
+          applyEnrichedToState(link, t, s);
+          got.add(link);
+        }
+      }
+
+      const missed = batchLinks.filter((l) => !got.has(l));
+      if (missed.length > 0) markBatchError(missed);
+    } catch {
+      markBatchError(batchLinks);
+    }
   }
 
   async function pumpQueue() {
@@ -829,7 +828,7 @@ export default function Home() {
 
           const link = a.link;
           const st = enrichState[link]?.status || "idle";
-          const errMsg = enrichState[link]?.message || "Summary unavailable.";
+          const errMsg = enrichState[link]?.message || GENERIC_ENRICH_ERROR;
 
           return (
             <div
