@@ -105,6 +105,98 @@ const DEFAULT_CATEGORY: CategoryFilter = "all";
 const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
 const DEFAULT_QUERY = "";
 
+type ShareNavigator = Navigator & {
+  share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+};
+
+function CopyLinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <path
+        d="M10.6 13.4a1 1 0 0 1 0-1.4l3.4-3.4a3 3 0 1 1 4.2 4.2l-2.3 2.3a3 3 0 0 1-4.2 0"
+        fill="none"
+        stroke="#2563eb"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13.4 10.6a1 1 0 0 1 0 1.4L10 15.4a3 3 0 0 1-4.2-4.2l2.3-2.3a3 3 0 0 1 4.2 0"
+        fill="none"
+        stroke="#60a5fa"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
+      <circle cx="16" cy="16" r="16" fill="#25D366" />
+      <path
+        fill="#fff"
+        d="M23.4 18.7c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-.9 1.1-.2.2-.3.2-.6.1-1.8-.9-3.1-1.7-4.4-3.9-.2-.3 0-.5.1-.7.1-.1.3-.4.5-.5.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.1-.7-1.8-1-2.4-.2-.5-.5-.4-.7-.4h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1 2.7 1.1 2.9c.1.2 2 3.2 5 4.5.7.3 1.3.5 1.7.7.7.2 1.3.2 1.8.1.6-.1 1.9-.8 2.1-1.6.3-.8.3-1.5.2-1.6 0-.1-.2-.2-.5-.4Z"
+      />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
+      <rect width="32" height="32" rx="16" fill="#000000" />
+      <path
+        fill="#ffffff"
+        d="M18.9 13.6 25.5 6h-1.6l-5.7 6.5L13.7 6H8.2l6.9 9.9L8.2 24h1.6l6-6.9 4.8 6.9h5.5l-7.2-10.4Zm-2.3 2.6-.7-1L10 7h2.5l4.7 6.7.7 1 6 8.6h-2.5l-4.9-7.1Z"
+      />
+    </svg>
+  );
+}
+
+function FacebookIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
+      <rect width="32" height="32" rx="16" fill="#1877F2" />
+      <path
+        fill="#ffffff"
+        d="M18.2 25v-8h2.7l.4-3.1h-3.1v-2c0-.9.3-1.6 1.6-1.6h1.7V7.5c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.2v2.3H12.4V17H15v8h3.2Z"
+      />
+    </svg>
+  );
+}
+
+function EmailIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
+      <rect width="32" height="32" rx="16" fill="#EA4335" />
+      <path
+        fill="#ffffff"
+        d="M9 10.5A1.5 1.5 0 0 1 10.5 9h11A1.5 1.5 0 0 1 23 10.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 9 21.5v-11Zm1.7.2 5.3 4.1 5.3-4.1H10.7Zm10.6 1.9-4.6 3.6a1.2 1.2 0 0 1-1.4 0l-4.6-3.6v8.7h10.6v-8.7Z"
+      />
+    </svg>
+  );
+}
+
+function MoreAppsIcon() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-5 w-5" aria-hidden="true">
+      <defs>
+        <linearGradient id="moreAppsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#8b5cf6" />
+          <stop offset="50%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#22c55e" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="16" r="16" fill="url(#moreAppsGradient)" />
+      <path
+        fill="#ffffff"
+        d="M10 16.9a2.4 2.4 0 1 0 0-1.8h5.8l2.2-2.5a2.4 2.4 0 1 0-1.4-1.2l-2.7 3.1c-.2.2-.2.3-.3.6v.1H10Zm13.6 3.3a2.4 2.4 0 0 0-5-0.7l-2.9-2.1a1 1 0 0 0-.6-.2H10a2.4 2.4 0 1 0 0 1.8h4.8l3.2 2.3a2.4 2.4 0 1 0 5.6-1.1Z"
+      />
+    </svg>
+  );
+}
+
 async function safeJson(res: Response) {
   const text = await res.text();
   if (!text) return null;
@@ -244,6 +336,7 @@ export default function Home() {
   const [prefsReady, setPrefsReady] = useState(false);
 
   const [infoOpen, setInfoOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
@@ -254,6 +347,8 @@ export default function Home() {
 
   const [enrichState, setEnrichState] = useState<Record<string, EnrichState>>({});
 
+  const [shareMessage, setShareMessage] = useState("");
+
   const inflightRef = useRef(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const queuedRef = useRef<Set<string>>(new Set());
@@ -263,6 +358,7 @@ export default function Home() {
   const [, forceRerender] = useState(0);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const shareMessageTimerRef = useRef<number | null>(null);
 
   const topicsInData = useMemo(() => {
     const s = new Set<string>();
@@ -303,6 +399,114 @@ export default function Home() {
     try {
       searchInputRef.current?.focus();
     } catch {}
+  }
+
+  function showShareFeedback(message: string) {
+    setShareMessage(message);
+
+    if (shareMessageTimerRef.current) {
+      window.clearTimeout(shareMessageTimerRef.current);
+    }
+
+    shareMessageTimerRef.current = window.setTimeout(() => {
+      setShareMessage("");
+      shareMessageTimerRef.current = null;
+    }, 1800);
+  }
+
+  function getSharePath() {
+    return buildShareableUrl({
+      country,
+      range,
+      category,
+      headlineLimit,
+      query,
+    });
+  }
+
+  function getShareUrl() {
+    return `${window.location.origin}${getSharePath()}`;
+  }
+
+  async function copyShareUrl(url: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return;
+    }
+
+    const ta = document.createElement("textarea");
+    ta.value = url;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "absolute";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+
+  async function handleCopyLink() {
+    try {
+      await copyShareUrl(getShareUrl());
+      showShareFeedback("Link copied");
+      setShareOpen(false);
+    } catch {
+      showShareFeedback("Copy failed");
+    }
+  }
+
+  async function handleNativeShare() {
+    try {
+      const nav = navigator as ShareNavigator;
+      const url = getShareUrl();
+
+      if (!nav.share) {
+        await copyShareUrl(url);
+        showShareFeedback("Link copied");
+        setShareOpen(false);
+        return;
+      }
+
+      try {
+        await nav.share({
+          title: "Mercosur News",
+          text: `View this Mercosur News feed: ${selectedCountryName}`,
+          url,
+        });
+      } catch (err: any) {
+        const name = String(err?.name || "");
+        if (name === "AbortError") return;
+        await copyShareUrl(url);
+        showShareFeedback("Link copied");
+      }
+
+      setShareOpen(false);
+    } catch {
+      showShareFeedback("Copy failed");
+    }
+  }
+
+  function openExternalShare(type: "whatsapp" | "x" | "facebook" | "email") {
+    const url = getShareUrl();
+    const encodedUrl = encodeURIComponent(url);
+    const text = encodeURIComponent(`Mercosur News: ${selectedCountryName}`);
+    let shareHref = "";
+
+    if (type === "whatsapp") {
+      shareHref = `https://wa.me/?text=${text}%20${encodedUrl}`;
+    } else if (type === "x") {
+      shareHref = `https://twitter.com/intent/tweet?text=${text}&url=${encodedUrl}`;
+    } else if (type === "facebook") {
+      shareHref = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
+    } else if (type === "email") {
+      shareHref = `mailto:?subject=${encodeURIComponent(`Mercosur News: ${selectedCountryName}`)}&body=${encodeURIComponent(
+        `Take a look at this Mercosur News view:\n\n${url}`
+      )}`;
+    }
+
+    if (!shareHref) return;
+    window.open(shareHref, "_blank", "noopener,noreferrer");
+    setShareOpen(false);
   }
 
   async function loadTopStories(
@@ -703,6 +907,14 @@ export default function Home() {
     } catch {}
   }, [country, range, category, headlineLimit, query, prefsReady]);
 
+  useEffect(() => {
+    return () => {
+      if (shareMessageTimerRef.current) {
+        window.clearTimeout(shareMessageTimerRef.current);
+      }
+    };
+  }, []);
+
   const filteredClusters = useMemo(() => {
     let list = clusters;
 
@@ -725,6 +937,8 @@ export default function Home() {
   const showEmptyState = !loading && !loadError && clusters.length > 0 && filteredClusters.length === 0;
   const showClearFilters = showEmptyState && (hasActiveSearch || hasActiveCategory);
   const freshnessText = !loadError ? freshnessLabel(freshnessAgeS) : "";
+  const nav = typeof navigator !== "undefined" ? (navigator as ShareNavigator) : null;
+  const canNativeShare = !!nav?.share;
 
   async function handleInstallClick() {
     if (standalone) return;
@@ -783,9 +997,20 @@ export default function Home() {
 
       <hr className="mb-10 border-gray-200 dark:border-gray-800" />
 
-      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-3xl font-bold">{selectedCountryName} News</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-3xl font-bold">{selectedCountryName} News</h2>
+            <button
+              onClick={() => setShareOpen(true)}
+              className="inline-flex items-center rounded-full border border-gray-500 bg-transparent px-3 py-1.5 text-sm text-black transition hover:opacity-90 dark:text-white"
+              title="Share this view"
+            >
+              Share
+            </button>
+            {shareMessage ? <span className="text-sm text-gray-600 dark:text-gray-400">{shareMessage}</span> : null}
+          </div>
+
           {!loading && !loadError ? (
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400">
               <span>{storyCountLabel(filteredClusters.length)}</span>
@@ -1056,6 +1281,93 @@ export default function Home() {
           );
         })}
       </div>
+
+      {shareOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button className="absolute inset-0 bg-black/60" aria-label="Close share modal" onClick={() => setShareOpen(false)} />
+          <div className="relative w-[calc(100vw-2rem)] max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold">Share this view</h3>
+              </div>
+
+              <button
+                onClick={() => setShareOpen(false)}
+                className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs hover:opacity-90 dark:border-gray-700"
+                aria-label="Close share modal"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-left text-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              >
+                <span className="shrink-0">
+                  <CopyLinkIcon />
+                </span>
+                <span className="font-medium">Copy link</span>
+              </button>
+
+              <button
+                onClick={() => openExternalShare("whatsapp")}
+                className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-left text-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              >
+                <span className="shrink-0">
+                  <WhatsAppIcon />
+                </span>
+                <span className="font-medium">WhatsApp</span>
+              </button>
+
+              <button
+                onClick={() => openExternalShare("x")}
+                className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-left text-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              >
+                <span className="shrink-0">
+                  <XIcon />
+                </span>
+                <span className="font-medium">X</span>
+              </button>
+
+              <button
+                onClick={() => openExternalShare("facebook")}
+                className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-left text-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              >
+                <span className="shrink-0">
+                  <FacebookIcon />
+                </span>
+                <span className="font-medium">Facebook</span>
+              </button>
+
+              <button
+                onClick={() => openExternalShare("email")}
+                className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-left text-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+              >
+                <span className="shrink-0">
+                  <EmailIcon />
+                </span>
+                <span className="font-medium">Email</span>
+              </button>
+
+              <button
+                onClick={handleNativeShare}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-4 text-left text-sm transition ${
+                  canNativeShare
+                    ? "border-gray-300 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                    : "border-gray-200 bg-gray-100 text-gray-500 dark:border-gray-800 dark:bg-white/[0.02] dark:text-gray-500"
+                }`}
+              >
+                <span className="shrink-0">
+                  <MoreAppsIcon />
+                </span>
+                <span className="font-medium">More apps</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {infoOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
