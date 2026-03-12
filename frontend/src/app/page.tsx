@@ -848,9 +848,9 @@ export default function Home() {
 
       {showEmptyState ? (
         <div className="rounded border border-gray-200 bg-gray-50 px-5 py-8 text-center dark:border-gray-800 dark:bg-white/[0.03]">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No stories matched your filters</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No stories match this view</h3>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            Try clearing your search or switching category filters to see more stories in this feed.
+            Try broadening your search or switching categories to see more coverage from this feed.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-gray-500 dark:text-gray-500">
@@ -868,7 +868,7 @@ export default function Home() {
                 onClick={clearSearchAndCategory}
                 className="inline-flex items-center rounded-full border border-gray-500 bg-black px-4 py-2 text-sm text-white transition hover:opacity-90 dark:bg-white dark:text-black"
               >
-                Clear filters
+                Reset search and category
               </button>
             </div>
           ) : null}
