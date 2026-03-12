@@ -99,6 +99,12 @@ const STORAGE_KEYS = {
   headlineLimit: "mercosur-news-headline-limit",
 } as const;
 
+const DEFAULT_COUNTRY: CountryOption["key"] = "uy";
+const DEFAULT_RANGE = "24h";
+const DEFAULT_CATEGORY: CategoryFilter = "all";
+const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
+const DEFAULT_QUERY = "";
+
 async function safeJson(res: Response) {
   const text = await res.text();
   if (!text) return null;
@@ -197,6 +203,29 @@ function isValidCategory(value: string): value is CategoryFilter {
 
 function isValidHeadlineLimit(value: string): value is `${HeadlineLimit}` {
   return ["30", "50", "100", "200"].includes(value);
+}
+
+function buildShareableUrl(params: {
+  country: CountryOption["key"];
+  range: string;
+  category: CategoryFilter;
+  headlineLimit: HeadlineLimit;
+  query: string;
+}) {
+  if (typeof window === "undefined") return "";
+
+  const sp = new URLSearchParams();
+
+  if (params.country !== DEFAULT_COUNTRY) sp.set("country", params.country);
+  if (params.range !== DEFAULT_RANGE) sp.set("range", params.range);
+  if (params.category !== DEFAULT_CATEGORY) sp.set("category", params.category);
+  if (params.headlineLimit !== DEFAULT_HEADLINE_LIMIT) sp.set("limit", String(params.headlineLimit));
+
+  const trimmedQuery = params.query.trim();
+  if (trimmedQuery) sp.set("q", trimmedQuery);
+
+  const qs = sp.toString();
+  return `${window.location.pathname}${qs ? `?${qs}` : ""}`;
 }
 
 export default function Home() {
@@ -452,10 +481,11 @@ export default function Home() {
 
   useEffect(() => {
     let savedTheme: "dark" | "light" = "dark";
-    let savedCountry: CountryOption["key"] = "uy";
-    let savedRange = "24h";
-    let savedCategory: CategoryFilter = "all";
-    let savedHeadlineLimit: HeadlineLimit = 30;
+    let savedCountry: CountryOption["key"] = DEFAULT_COUNTRY;
+    let savedRange = DEFAULT_RANGE;
+    let savedCategory: CategoryFilter = DEFAULT_CATEGORY;
+    let savedHeadlineLimit: HeadlineLimit = DEFAULT_HEADLINE_LIMIT;
+    let savedQuery = DEFAULT_QUERY;
 
     try {
       const themeRaw = window.localStorage.getItem(STORAGE_KEYS.theme);
@@ -484,6 +514,35 @@ export default function Home() {
       }
     } catch {}
 
+    try {
+      const sp = new URLSearchParams(window.location.search);
+
+      const countryParam = sp.get("country");
+      if (countryParam && isValidCountryKey(countryParam)) {
+        savedCountry = countryParam;
+      }
+
+      const rangeParam = sp.get("range");
+      if (rangeParam && isValidRange(rangeParam)) {
+        savedRange = rangeParam;
+      }
+
+      const categoryParam = sp.get("category");
+      if (categoryParam && isValidCategory(categoryParam)) {
+        savedCategory = categoryParam;
+      }
+
+      const limitParam = sp.get("limit");
+      if (limitParam && isValidHeadlineLimit(limitParam)) {
+        savedHeadlineLimit = Number(limitParam) as HeadlineLimit;
+      }
+
+      const queryParam = sp.get("q");
+      if (typeof queryParam === "string") {
+        savedQuery = queryParam;
+      }
+    } catch {}
+
     setMounted(true);
     setTheme(savedTheme);
 
@@ -496,6 +555,7 @@ export default function Home() {
     setRange(savedRange);
     setCategory(savedCategory);
     setHeadlineLimit(savedHeadlineLimit);
+    setQuery(savedQuery);
     setPrefsReady(true);
 
     loadTopStories(savedRange, savedCountry, savedHeadlineLimit);
@@ -626,6 +686,22 @@ export default function Home() {
       window.localStorage.setItem(STORAGE_KEYS.headlineLimit, String(headlineLimit));
     } catch {}
   }, [headlineLimit, prefsReady]);
+
+  useEffect(() => {
+    if (!prefsReady) return;
+    try {
+      const nextUrl = buildShareableUrl({
+        country,
+        range,
+        category,
+        headlineLimit,
+        query,
+      });
+      if (nextUrl && `${window.location.pathname}${window.location.search}` !== nextUrl) {
+        window.history.replaceState(null, "", nextUrl);
+      }
+    } catch {}
+  }, [country, range, category, headlineLimit, query, prefsReady]);
 
   const filteredClusters = useMemo(() => {
     let list = clusters;
