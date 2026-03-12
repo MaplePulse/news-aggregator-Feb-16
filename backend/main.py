@@ -405,6 +405,19 @@ def _iso_is_fresh(created_utc: str, ttl_s: int) -> bool:
         return False
 
 
+def _parse_iso_utc(s: str) -> Optional[datetime]:
+    raw = (s or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
 def _get_cached_cluster_enrich(cluster_id: str) -> Optional[Dict[str, Any]]:
     cid = (cluster_id or "").strip()
     if not cid:
@@ -2074,6 +2087,114 @@ def _rank_score_and_factors(a: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
     return score, factors
 
 
+def _cluster_rank_weights() -> Dict[str, float]:
+    return {
+        "recency_weight": _env_float("CLUSTER_RANK_RECENCY_W", 4.6),
+        "recency_tau_hours": _env_float("CLUSTER_RANK_RECENCY_TAU_H", 14.0),
+        "duplicates_weight": _env_float("CLUSTER_RANK_DUP_W", 1.65),
+        "sources_weight": _env_float("CLUSTER_RANK_SOURCES_W", 1.05),
+        "confidence_weight": _env_float("CLUSTER_RANK_CONF_W", 2.2),
+        "snippet_weight": _env_float("CLUSTER_RANK_SNIP_W", 0.45),
+        "cached_weight": _env_float("CLUSTER_RANK_CACHED_W", 0.35),
+        "mercopress_penalty_all": _env_float("CLUSTER_RANK_MP_PENALTY_ALL", 0.35),
+        "mercopress_boost_mp": _env_float("CLUSTER_RANK_MP_BOOST_MP", 0.35),
+    }
+
+
+def _cluster_rank_score_and_factors(cobj: Dict[str, Any], country_context: str) -> Tuple[float, Dict[str, Any]]:
+    best = cobj.get("best_item") or {}
+    now = datetime.now(timezone.utc)
+
+    pu = (best.get("published_utc") or "").strip()
+    dt = _parse_iso_utc(pu)
+    if dt is None:
+        age_hours = 6.0
+    else:
+        age_hours = max(0.0, (now - dt).total_seconds() / 3600.0)
+
+    w = _cluster_rank_weights()
+
+    tau = max(1e-6, float(w["recency_tau_hours"]))
+    recency_raw = math.exp(-age_hours / tau)
+    recency_term = recency_raw * float(w["recency_weight"])
+
+    dup_count = max(1, int(cobj.get("duplicates_count") or 1))
+    dup_raw = math.log1p(float(dup_count))
+    dup_term = dup_raw * float(w["duplicates_weight"])
+
+    sources_count = max(1, int(cobj.get("sources_count") or 1))
+    sources_raw = math.log1p(float(sources_count))
+    sources_term = sources_raw * float(w["sources_weight"])
+
+    confidence = float(cobj.get("cluster_confidence") or 0.0)
+    if confidence < 0.0:
+        confidence = 0.0
+    if confidence > 1.0:
+        confidence = 1.0
+    confidence_term = confidence * float(w["confidence_weight"])
+
+    snip_len = len((best.get("snippet_text") or "").strip())
+    snip_raw = min(1.0, snip_len / 220.0)
+    snip_term = snip_raw * float(w["snippet_weight"])
+
+    has_cached = 1.0 if best.get("has_cached_summary") else 0.0
+    cached_term = has_cached * float(w["cached_weight"])
+
+    country_context_norm = (country_context or "").strip().lower()
+    is_mercopress = (best.get("country_key") or "").strip().lower() == "mp"
+
+    mp_term = 0.0
+    if is_mercopress and country_context_norm == "all":
+        mp_term = -abs(float(w["mercopress_penalty_all"]))
+    elif is_mercopress and country_context_norm == "mp":
+        mp_term = abs(float(w["mercopress_boost_mp"]))
+
+    score = float(
+        recency_term
+        + dup_term
+        + sources_term
+        + confidence_term
+        + snip_term
+        + cached_term
+        + mp_term
+    )
+
+    factors: Dict[str, Any] = {
+        "age_hours": round(float(age_hours), 3),
+        "recency_raw": round(float(recency_raw), 6),
+        "recency_term": round(float(recency_term), 6),
+        "duplicates_count": int(dup_count),
+        "duplicates_raw": round(float(dup_raw), 6),
+        "duplicates_term": round(float(dup_term), 6),
+        "sources_count": int(sources_count),
+        "sources_raw": round(float(sources_raw), 6),
+        "sources_term": round(float(sources_term), 6),
+        "cluster_confidence": round(float(confidence), 6),
+        "confidence_term": round(float(confidence_term), 6),
+        "snippet_len": int(snip_len),
+        "snippet_raw": round(float(snip_raw), 6),
+        "snippet_term": round(float(snip_term), 6),
+        "has_cached_summary": bool(best.get("has_cached_summary")),
+        "cached_term": round(float(cached_term), 6),
+        "is_mercopress": bool(is_mercopress),
+        "country_context": country_context_norm,
+        "mp_term": round(float(mp_term), 6),
+        "weights": {
+            "recency_weight": w["recency_weight"],
+            "recency_tau_hours": w["recency_tau_hours"],
+            "duplicates_weight": w["duplicates_weight"],
+            "sources_weight": w["sources_weight"],
+            "confidence_weight": w["confidence_weight"],
+            "snippet_weight": w["snippet_weight"],
+            "cached_weight": w["cached_weight"],
+            "mercopress_penalty_all": w["mercopress_penalty_all"],
+            "mercopress_boost_mp": w["mercopress_boost_mp"],
+        },
+    }
+
+    return score, factors
+
+
 # ----------------------------
 # OpenAI client
 # ----------------------------
@@ -2348,11 +2469,16 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
             best["summary_en"] = cached_cluster.get("summary_en") or ""
             best["has_cached_summary"] = True
 
+        cscore, cfactors = _cluster_rank_score_and_factors(cobj, country_context=c)
+        cobj["cluster_rank_score"] = cscore
+        cobj["cluster_rank_factors"] = cfactors
+        best["cluster_rank_score"] = cscore
+
         cobj["best_item"] = _strip_internal_fields(best)
 
     clusters.sort(
         key=lambda cobj: (
-            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
+            float(cobj.get("cluster_rank_score") or 0.0),
             ((cobj.get("best_item") or {}).get("published_utc") or ""),
         ),
         reverse=True,
@@ -2373,6 +2499,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     - SQLite TTL cache for the whole /top response
     - cluster_enrich_cache injection (applies to cached payloads)
     - Smarter clustering v2 with confidence/keywords/entities
+    - Cluster-level ranking polish for better homepage ordering
     - Strips internal fields from API output
     """
     c = (country or "uy").strip().lower()
@@ -2419,11 +2546,17 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
             best["title_en"] = cached_cluster.get("title_en") or ""
             best["summary_en"] = cached_cluster.get("summary_en") or ""
             best["has_cached_summary"] = True
+
+        cscore, cfactors = _cluster_rank_score_and_factors(cobj, country_context=c)
+        cobj["cluster_rank_score"] = cscore
+        cobj["cluster_rank_factors"] = cfactors
+        best["cluster_rank_score"] = cscore
+
         cobj["best_item"] = _strip_internal_fields(best)
 
     clusters.sort(
         key=lambda cobj: (
-            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
+            float(cobj.get("cluster_rank_score") or 0.0),
             ((cobj.get("best_item") or {}).get("published_utc") or ""),
         ),
         reverse=True,
@@ -2781,9 +2914,14 @@ def _worker_loop() -> None:
                     )
 
                     clusters = _cluster_items_v2(items[: max(80, effective_scan_limit * 4)])
+                    for cobj in clusters:
+                        cscore, cfactors = _cluster_rank_score_and_factors(cobj, country_context=c)
+                        cobj["cluster_rank_score"] = cscore
+                        cobj["cluster_rank_factors"] = cfactors
+
                     clusters.sort(
                         key=lambda cobj: (
-                            float(((cobj.get("best_item") or {}).get("rank_score") or 0.0)),
+                            float(cobj.get("cluster_rank_score") or 0.0),
                             ((cobj.get("best_item") or {}).get("published_utc") or ""),
                         ),
                         reverse=True,
