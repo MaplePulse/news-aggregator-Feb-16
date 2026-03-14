@@ -6,24 +6,17 @@ type Article = {
   title: string;
   link: string;
   published: string;
-
   source: string;
   source_logo?: string | null;
   country_flag_url?: string | null;
-
   snippet_text: string;
-
   title_en?: string | null;
   summary_en?: string | null;
-
   topic?: string | null;
-
   published_utc?: string | null;
   duplicates_count?: number | null;
   rank_score?: number | null;
-
   rank_factors?: any;
-
   source_categories?: string[] | null;
   source_category_primary?: string | null;
 };
@@ -38,7 +31,6 @@ type Cluster = {
 };
 
 type RegionKey = "mercosur" | "mexico" | "central-america";
-
 type MercosurCountryKey = "all" | "mp" | "uy" | "ar" | "br" | "py" | "bo";
 type CountryKey = MercosurCountryKey;
 
@@ -102,10 +94,8 @@ const CATEGORY_ORDER = [
 ] as const;
 
 type CategoryFilter = "all" | (typeof CATEGORY_ORDER)[number];
-
 type EnrichStatus = "idle" | "loading" | "ok" | "error";
 type EnrichState = { status: EnrichStatus; message?: string };
-
 type LoadError = { message: string; status?: number } | null;
 
 const STORAGE_KEYS = {
@@ -218,7 +208,7 @@ function MoreAppsIcon() {
 
 function InfoIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
       <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path d="M12 10.2v5.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <circle cx="12" cy="7.2" r="1.1" fill="currentColor" />
@@ -246,6 +236,28 @@ function MoonIcon() {
       <path
         d="M20 14.2A8.5 8.5 0 0 1 9.8 4a8.8 8.8 0 1 0 10.2 10.2Z"
         fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M4 6h16M7 12h10M10 18h4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -800,29 +812,19 @@ export default function Home() {
 
     try {
       const themeRaw = window.localStorage.getItem(STORAGE_KEYS.theme);
-      if (themeRaw === "light" || themeRaw === "dark") {
-        savedTheme = themeRaw;
-      }
+      if (themeRaw === "light" || themeRaw === "dark") savedTheme = themeRaw;
 
       const regionRaw = window.localStorage.getItem(STORAGE_KEYS.region);
-      if (regionRaw && isValidRegionKey(regionRaw) && isLiveRegion(regionRaw)) {
-        savedRegion = regionRaw;
-      }
+      if (regionRaw && isValidRegionKey(regionRaw) && isLiveRegion(regionRaw)) savedRegion = regionRaw;
 
       const countryRaw = window.localStorage.getItem(STORAGE_KEYS.country);
-      if (countryRaw && isValidCountryKey(countryRaw)) {
-        savedCountry = countryRaw;
-      }
+      if (countryRaw && isValidCountryKey(countryRaw)) savedCountry = countryRaw;
 
       const rangeRaw = window.localStorage.getItem(STORAGE_KEYS.range);
-      if (rangeRaw && isValidRange(rangeRaw)) {
-        savedRange = rangeRaw;
-      }
+      if (rangeRaw && isValidRange(rangeRaw)) savedRange = rangeRaw;
 
       const categoryRaw = window.localStorage.getItem(STORAGE_KEYS.category);
-      if (categoryRaw && isValidCategory(categoryRaw)) {
-        savedCategory = categoryRaw;
-      }
+      if (categoryRaw && isValidCategory(categoryRaw)) savedCategory = categoryRaw;
 
       const headlineLimitRaw = window.localStorage.getItem(STORAGE_KEYS.headlineLimit);
       if (headlineLimitRaw && isValidHeadlineLimit(headlineLimitRaw)) {
@@ -834,24 +836,16 @@ export default function Home() {
       const sp = new URLSearchParams(window.location.search);
 
       const regionParam = sp.get("region");
-      if (regionParam && isValidRegionKey(regionParam) && isLiveRegion(regionParam)) {
-        savedRegion = regionParam;
-      }
+      if (regionParam && isValidRegionKey(regionParam) && isLiveRegion(regionParam)) savedRegion = regionParam;
 
       const countryParam = sp.get("country");
-      if (countryParam && isValidCountryKey(countryParam)) {
-        savedCountry = countryParam;
-      }
+      if (countryParam && isValidCountryKey(countryParam)) savedCountry = countryParam;
 
       const rangeParam = sp.get("range");
-      if (rangeParam && isValidRange(rangeParam)) {
-        savedRange = rangeParam;
-      }
+      if (rangeParam && isValidRange(rangeParam)) savedRange = rangeParam;
 
       const categoryParam = sp.get("category");
-      if (categoryParam && isValidCategory(categoryParam)) {
-        savedCategory = categoryParam;
-      }
+      if (categoryParam && isValidCategory(categoryParam)) savedCategory = categoryParam;
 
       const limitParam = sp.get("limit");
       if (limitParam && isValidHeadlineLimit(limitParam)) {
@@ -859,9 +853,7 @@ export default function Home() {
       }
 
       const queryParam = sp.get("q");
-      if (typeof queryParam === "string") {
-        savedQuery = queryParam;
-      }
+      if (typeof queryParam === "string") savedQuery = queryParam;
     } catch {}
 
     setMounted(true);
@@ -1035,12 +1027,8 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
-      if (shareMessageTimerRef.current) {
-        window.clearTimeout(shareMessageTimerRef.current);
-      }
-      if (comingSoonTimerRef.current) {
-        window.clearTimeout(comingSoonTimerRef.current);
-      }
+      if (shareMessageTimerRef.current) window.clearTimeout(shareMessageTimerRef.current);
+      if (comingSoonTimerRef.current) window.clearTimeout(comingSoonTimerRef.current);
     };
   }, []);
 
@@ -1062,6 +1050,15 @@ export default function Home() {
   }, [clusters, query, category]);
 
   const hasActiveSearch = query.trim().length > 0;
+  const hasNonDefaultRegion = region !== DEFAULT_REGION;
+  const hasNonDefaultCountry = country !== DEFAULT_COUNTRY;
+  const hasNonDefaultRange = range !== DEFAULT_RANGE;
+  const hasNonDefaultCategory = category !== DEFAULT_CATEGORY;
+  const hasNonDefaultLimit = headlineLimit !== DEFAULT_HEADLINE_LIMIT;
+
+  const showFilterChips =
+    hasNonDefaultRegion || hasNonDefaultCountry || hasNonDefaultRange || hasNonDefaultCategory || hasNonDefaultLimit;
+
   const showEmptyState = !loading && !loadError && clusters.length > 0 && filteredClusters.length === 0;
   const freshnessText = !loadError ? freshnessLabel(freshnessAgeS) : "";
   const nav = typeof navigator !== "undefined" ? (navigator as ShareNavigator) : null;
@@ -1083,7 +1080,6 @@ export default function Home() {
 
   function handleRegionChange(nextRegion: RegionKey) {
     const option = REGION_OPTIONS.find((r) => r.key === nextRegion);
-
     if (!option) return;
 
     if (option.status !== "live") {
@@ -1103,80 +1099,48 @@ export default function Home() {
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
   const selectedCountryName = countryOptions.find((c) => c.key === country)?.name || "Uruguay";
 
+  const subscribeInsertIndex = filteredClusters.length >= 4 ? 3 : -1;
+
   return (
-    <main className="mx-auto max-w-6xl overflow-x-hidden px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-      <section className="relative overflow-hidden rounded-3xl border border-gray-200/80 bg-white/80 px-5 py-6 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/40 sm:px-7 sm:py-8">
+    <main className="mx-auto max-w-6xl overflow-x-hidden px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <section className="relative overflow-hidden rounded-3xl border border-gray-200/80 bg-white/80 px-5 py-5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/40 sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.10),transparent_32%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_32%)]" />
 
-        <div className="relative flex flex-col gap-4">
-          <div className="min-w-0">
-            <h1 className="break-words text-5xl font-extrabold leading-[0.95] tracking-tight text-gray-950 dark:text-white sm:text-6xl">
-              <span className="text-blue-500">{selectedRegionName}</span> News
-            </h1>
+        <div className="relative flex flex-col gap-3">
+          <h1 className="break-words text-[3.35rem] font-extrabold leading-[0.92] tracking-tight text-gray-950 dark:text-white sm:text-6xl">
+            <span className="text-blue-500">{selectedRegionName}</span> News
+          </h1>
 
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400 sm:text-base">
-                Your Source for English Regional Information
-              </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400 sm:text-base">
+              Your Source for English Regional Information
+            </p>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <button
-                  onClick={() => setInfoOpen(true)}
-                  aria-label="Info"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
-                >
-                  <InfoIcon />
-                </button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={() => setInfoOpen(true)}
+                aria-label="Info"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
+              >
+                <InfoIcon />
+              </button>
 
-                <button
-                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
-                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                >
-                  {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
-                  <span>{mounted ? (theme === "dark" ? "Light" : "Dark") : "Theme"}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
+                <span>{mounted ? (theme === "dark" ? "Light" : "Dark") : "Theme"}</span>
+              </button>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="mt-8 rounded-3xl border border-gray-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <button
-              className="inline-flex h-9 items-center rounded-full border border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
-              onClick={() => setFiltersOpen(true)}
-              title="Open filters"
-            >
-              Filters
-            </button>
-
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Region: {selectedRegionName}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Country: {selectedCountryName}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Range: {range === "24h" ? "24h" : range === "3d" ? "3 Days" : range === "7d" ? "7 Days" : "30 Days"}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Category: {category === "all" ? "All categories" : category}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Limit: Top {headlineLimit}
-            </span>
-          </div>
-
-          {comingSoonMessage ? (
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
-              {comingSoonMessage}
-            </div>
-          ) : null}
-
-          <div className="flex items-center gap-3">
+      <section className="mt-5 rounded-3xl border border-gray-200 bg-white/80 p-4 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-5">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
             <div className="flex-1">
               <label className="sr-only">Search</label>
               <input
@@ -1195,42 +1159,63 @@ export default function Home() {
             </div>
 
             <button
-              className="h-11 shrink-0 rounded-xl border border-gray-900 bg-gray-900 px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-              onClick={performSearchAction}
-              title="Search (filters as you type)"
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
+              onClick={() => setFiltersOpen(true)}
+              title="Open filters"
             >
-              Search
+              <FilterIcon />
+              <span className="hidden sm:inline">Filters</span>
             </button>
-          </div>
-        </div>
-      </section>
 
-      <section className="mt-6 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-5 shadow-sm dark:border-amber-500/20 dark:from-amber-500/10 dark:via-black/40 dark:to-amber-500/10">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="min-w-0">
-            <div className="inline-flex items-center rounded-full border border-amber-300 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-white/5 dark:text-amber-300">
-              Upgrade
-            </div>
-            <h3 className="mt-3 text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
-              Subscribe and keep the app ad free
-            </h3>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-              Enjoy a cleaner reading experience while supporting the continued growth of the app.
-            </p>
-          </div>
-
-          <div className="shrink-0">
             <button
-              className="inline-flex min-h-11 items-center rounded-full border border-gray-900 bg-gray-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-              type="button"
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-gray-900 bg-gray-900 px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
+              onClick={performSearchAction}
+              title="Search"
             >
-              Subscribe
+              <SearchIcon />
+              <span className="hidden sm:inline">Search</span>
             </button>
           </div>
+
+          {showFilterChips ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              {hasNonDefaultRegion ? (
+                <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+                  Region: {selectedRegionName}
+                </span>
+              ) : null}
+              {hasNonDefaultCountry ? (
+                <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+                  Country: {selectedCountryName}
+                </span>
+              ) : null}
+              {hasNonDefaultRange ? (
+                <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+                  Range: {range === "24h" ? "24h" : range === "3d" ? "3 Days" : range === "7d" ? "7 Days" : "30 Days"}
+                </span>
+              ) : null}
+              {hasNonDefaultCategory ? (
+                <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+                  Category: {category}
+                </span>
+              ) : null}
+              {hasNonDefaultLimit ? (
+                <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+                  Limit: Top {headlineLimit}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {comingSoonMessage ? (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+              {comingSoonMessage}
+            </div>
+          ) : null}
         </div>
       </section>
 
-      <section className="mt-6 flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-6">
+      <section className="mt-5 flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -1304,7 +1289,7 @@ export default function Home() {
       </section>
 
       <div className="mt-6 space-y-6">
-        {filteredClusters.map((c) => {
+        {filteredClusters.map((c, index) => {
           const a = c.best_item;
 
           const src = (a.source || "").trim();
@@ -1322,89 +1307,117 @@ export default function Home() {
           const errMsg = enrichState[link]?.message || GENERIC_ENRICH_ERROR;
 
           return (
-            <div
-              key={c.cluster_id}
-              ref={(el) => {
-                cardRefs.current[a.link] = el;
-              }}
-              data-link={a.link}
-              className={`rounded-3xl border p-5 shadow-sm transition sm:p-6 ${
-                translatedReady
-                  ? "border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.02]"
-                  : "border-gray-200 bg-gray-50/80 opacity-70 dark:border-gray-800 dark:bg-white/[0.03]"
-              }`}
-            >
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  {a.country_flag_url ? <img src={a.country_flag_url} alt="Flag" className="h-4 w-auto rounded-sm" /> : null}
+            <div key={c.cluster_id}>
+              {subscribeInsertIndex === index ? (
+                <section className="mb-6 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-5 shadow-sm dark:border-amber-500/20 dark:from-amber-500/10 dark:via-black/40 dark:to-amber-500/10">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="inline-flex items-center rounded-full border border-amber-300 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-white/5 dark:text-amber-300">
+                        Upgrade
+                      </div>
+                      <h3 className="mt-3 text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
+                        Subscribe and keep the app ad free
+                      </h3>
+                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                        Enjoy a cleaner reading experience while supporting the continued growth of the app.
+                      </p>
+                    </div>
 
-                  {showLogo ? (
-                    <img
-                      src={a.source_logo as string}
-                      alt={a.source}
-                      className="h-5 w-5 object-contain"
-                      onError={() => {
-                        failedLogosRef.current.add(src);
-                        forceRerender((x) => x + 1);
-                      }}
-                    />
-                  ) : (
-                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-100 px-1 text-[11px] text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                      {initials(a.source)}
-                    </span>
-                  )}
-
-                  <span className="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">{a.source}</span>
-                </div>
-
-                {topic ? (
-                  <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-white/80">
-                    {topic}
-                  </span>
-                ) : null}
-              </div>
-
-              {translatedReady ? (
-                <>
-                  <h3 className="text-xl font-semibold leading-snug tracking-tight text-gray-950 dark:text-white">{a.title_en}</h3>
-                  <p className="mt-3 text-[15px] leading-7 text-gray-700 dark:text-white/75">{a.summary_en}</p>
-                </>
-              ) : st === "error" ? (
-                <>
-                  <div className="mb-2 h-6 w-40 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{errMsg}</p>
-                    <button
-                      onClick={() => retryEnrich(a.link)}
-                      className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-400 bg-transparent px-3 py-1.5 text-xs font-medium text-black transition hover:opacity-90 dark:border-gray-600 dark:text-white"
-                      aria-label="Retry summary enrichment"
-                    >
-                      Retry
-                    </button>
+                    <div className="shrink-0">
+                      <button
+                        className="inline-flex min-h-11 items-center rounded-full border border-gray-900 bg-gray-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
+                        type="button"
+                      >
+                        Subscribe
+                      </button>
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="animate-pulse space-y-3">
-                  <div className="h-6 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="h-3 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
-                  <div className="h-3 w-4/6 rounded bg-gray-200 dark:bg-gray-700" />
+                </section>
+              ) : null}
+
+              <div
+                ref={(el) => {
+                  cardRefs.current[a.link] = el;
+                }}
+                data-link={a.link}
+                className={`rounded-3xl border p-5 shadow-sm transition sm:p-6 ${
+                  translatedReady
+                    ? "border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.02]"
+                    : "border-gray-200 bg-gray-50/80 opacity-70 dark:border-gray-800 dark:bg-white/[0.03]"
+                }`}
+              >
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    {a.country_flag_url ? <img src={a.country_flag_url} alt="Flag" className="h-4 w-auto rounded-sm" /> : null}
+
+                    {showLogo ? (
+                      <img
+                        src={a.source_logo as string}
+                        alt={a.source}
+                        className="h-5 w-5 object-contain"
+                        onError={() => {
+                          failedLogosRef.current.add(src);
+                          forceRerender((x) => x + 1);
+                        }}
+                      />
+                    ) : (
+                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-gray-200 bg-gray-100 px-1 text-[11px] text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {initials(a.source)}
+                      </span>
+                    )}
+
+                    <span className="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">{a.source}</span>
+                  </div>
+
+                  {topic ? (
+                    <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:border-gray-700 dark:bg-white/5 dark:text-white/80">
+                      {topic}
+                    </span>
+                  ) : null}
                 </div>
-              )}
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-gray-600 dark:text-gray-400">{formatPublishedUTC(a)}</p>
+                {translatedReady ? (
+                  <>
+                    <h3 className="text-xl font-semibold leading-snug tracking-tight text-gray-950 dark:text-white">{a.title_en}</h3>
+                    <p className="mt-3 text-[15px] leading-7 text-gray-700 dark:text-white/75">{a.summary_en}</p>
+                  </>
+                ) : st === "error" ? (
+                  <>
+                    <div className="mb-2 h-6 w-40 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{errMsg}</p>
+                      <button
+                        onClick={() => retryEnrich(a.link)}
+                        className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-400 bg-transparent px-3 py-1.5 text-xs font-medium text-black transition hover:opacity-90 dark:border-gray-600 dark:text-white"
+                        aria-label="Retry summary enrichment"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-6 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-3 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
+                    <div className="h-3 w-4/6 rounded bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                )}
 
-                <button
-                  onClick={() => openTranslated(a.link)}
-                  disabled={!translatedReady}
-                  className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    translatedReady
-                      ? "border-gray-900 bg-gray-900 text-white hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-                      : "cursor-not-allowed border-gray-300 bg-gray-300 text-gray-600 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-500"
-                  }`}
-                >
-                  Open Translated Article →
-                </button>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{formatPublishedUTC(a)}</p>
+
+                  <button
+                    onClick={() => openTranslated(a.link)}
+                    disabled={!translatedReady}
+                    className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition ${
+                      translatedReady
+                        ? "border-gray-900 bg-gray-900 text-white hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
+                        : "cursor-not-allowed border-gray-300 bg-gray-300 text-gray-600 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-500"
+                    }`}
+                  >
+                    Open Translated Article →
+                  </button>
+                </div>
               </div>
             </div>
           );
