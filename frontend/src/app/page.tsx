@@ -39,8 +39,11 @@ type Cluster = {
 
 type RegionKey = "mercosur" | "mexico" | "central-america";
 
+type MercosurCountryKey = "all" | "mp" | "uy" | "ar" | "br" | "py" | "bo";
+type CountryKey = MercosurCountryKey;
+
 type CountryOption = {
-  key: "all" | "mp" | "uy" | "ar" | "br" | "py" | "bo";
+  key: CountryKey;
   code: string;
   name: string;
   flag_url: string;
@@ -115,7 +118,7 @@ const STORAGE_KEYS = {
 } as const;
 
 const DEFAULT_REGION: RegionKey = "mercosur";
-const DEFAULT_COUNTRY: CountryOption["key"] = "uy";
+const DEFAULT_COUNTRY: CountryKey = "uy";
 const DEFAULT_RANGE = "24h";
 const DEFAULT_CATEGORY: CategoryFilter = "all";
 const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
@@ -213,6 +216,41 @@ function MoreAppsIcon() {
   );
 }
 
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 10.2v5.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="7.2" r="1.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" fill="currentColor" />
+      <path
+        d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M20 14.2A8.5 8.5 0 0 1 9.8 4a8.8 8.8 0 1 0 10.2 10.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 async function safeJson(res: Response) {
   const text = await res.text();
   if (!text) return null;
@@ -305,7 +343,7 @@ function isLiveRegion(value: RegionKey) {
   return REGION_OPTIONS.some((r) => r.key === value && r.status === "live");
 }
 
-function isValidCountryKey(value: string): value is CountryOption["key"] {
+function isValidCountryKey(value: string): value is CountryKey {
   return ["all", "mp", "uy", "ar", "br", "py", "bo"].includes(value);
 }
 
@@ -323,7 +361,7 @@ function isValidHeadlineLimit(value: string): value is `${HeadlineLimit}` {
 
 function buildShareableUrl(params: {
   region: RegionKey;
-  country: CountryOption["key"];
+  country: CountryKey;
   range: string;
   category: CategoryFilter;
   headlineLimit: HeadlineLimit;
@@ -352,7 +390,7 @@ export default function Home() {
   const [region, setRegion] = useState<RegionKey>(DEFAULT_REGION);
   const [query, setQuery] = useState("");
   const [range, setRange] = useState(DEFAULT_RANGE);
-  const [country, setCountry] = useState<CountryOption["key"]>(DEFAULT_COUNTRY);
+  const [country, setCountry] = useState<CountryKey>(DEFAULT_COUNTRY);
   const [category, setCategory] = useState<CategoryFilter>(DEFAULT_CATEGORY);
   const [headlineLimit, setHeadlineLimit] = useState<HeadlineLimit>(DEFAULT_HEADLINE_LIMIT);
 
@@ -375,6 +413,7 @@ export default function Home() {
 
   const [enrichState, setEnrichState] = useState<Record<string, EnrichState>>({});
   const [shareMessage, setShareMessage] = useState("");
+  const [comingSoonMessage, setComingSoonMessage] = useState("");
 
   const inflightRef = useRef(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -386,6 +425,7 @@ export default function Home() {
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const shareMessageTimerRef = useRef<number | null>(null);
+  const comingSoonTimerRef = useRef<number | null>(null);
 
   const regionOptionsForUi = useMemo(() => REGION_OPTIONS, []);
 
@@ -432,12 +472,19 @@ export default function Home() {
   }
 
   function resetFiltersToDefault() {
-    setRegion(DEFAULT_REGION);
-    setCountry(DEFAULT_COUNTRY);
-    setRange(DEFAULT_RANGE);
-    setCategory(DEFAULT_CATEGORY);
-    setHeadlineLimit(DEFAULT_HEADLINE_LIMIT);
-    loadTopStories(DEFAULT_RANGE, DEFAULT_COUNTRY, DEFAULT_HEADLINE_LIMIT);
+    const nextRegion = DEFAULT_REGION;
+    const nextCountry = DEFAULT_COUNTRY;
+    const nextRange = DEFAULT_RANGE;
+    const nextCategory = DEFAULT_CATEGORY;
+    const nextHeadlineLimit = DEFAULT_HEADLINE_LIMIT;
+
+    setRegion(nextRegion);
+    setCountry(nextCountry);
+    setRange(nextRange);
+    setCategory(nextCategory);
+    setHeadlineLimit(nextHeadlineLimit);
+
+    loadTopStories(nextRegion, nextRange, nextCountry, nextHeadlineLimit);
   }
 
   function showShareFeedback(message: string) {
@@ -451,6 +498,19 @@ export default function Home() {
       setShareMessage("");
       shareMessageTimerRef.current = null;
     }, 1800);
+  }
+
+  function showComingSoon(message: string) {
+    setComingSoonMessage(message);
+
+    if (comingSoonTimerRef.current) {
+      window.clearTimeout(comingSoonTimerRef.current);
+    }
+
+    comingSoonTimerRef.current = window.setTimeout(() => {
+      setComingSoonMessage("");
+      comingSoonTimerRef.current = null;
+    }, 2200);
   }
 
   function getSharePath() {
@@ -550,6 +610,7 @@ export default function Home() {
   }
 
   async function loadTopStories(
+    selectedRegion = region,
     selectedRange = range,
     selectedCountry = country,
     selectedHeadlineLimit = headlineLimit
@@ -558,12 +619,17 @@ export default function Home() {
     setLoadError(null);
 
     try {
-      const res = await fetch(
-        `/api/top?country=${encodeURIComponent(selectedCountry)}&range=${encodeURIComponent(
-          selectedRange
-        )}&q=&limit=${encodeURIComponent(String(selectedHeadlineLimit))}`,
-        { cache: "no-store" }
-      );
+      const params = new URLSearchParams({
+        region: selectedRegion,
+        country: selectedCountry,
+        range: selectedRange,
+        q: "",
+        limit: String(selectedHeadlineLimit),
+      });
+
+      const res = await fetch(`/api/top?${params.toString()}`, {
+        cache: "no-store",
+      });
 
       const data = await safeJson(res);
 
@@ -726,7 +792,7 @@ export default function Home() {
   useEffect(() => {
     let savedTheme: "dark" | "light" = "dark";
     let savedRegion: RegionKey = DEFAULT_REGION;
-    let savedCountry: CountryOption["key"] = DEFAULT_COUNTRY;
+    let savedCountry: CountryKey = DEFAULT_COUNTRY;
     let savedRange = DEFAULT_RANGE;
     let savedCategory: CategoryFilter = DEFAULT_CATEGORY;
     let savedHeadlineLimit: HeadlineLimit = DEFAULT_HEADLINE_LIMIT;
@@ -814,7 +880,7 @@ export default function Home() {
     setQuery(savedQuery);
     setPrefsReady(true);
 
-    loadTopStories(savedRange, savedCountry, savedHeadlineLimit);
+    loadTopStories(savedRegion, savedRange, savedCountry, savedHeadlineLimit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -972,6 +1038,9 @@ export default function Home() {
       if (shareMessageTimerRef.current) {
         window.clearTimeout(shareMessageTimerRef.current);
       }
+      if (comingSoonTimerRef.current) {
+        window.clearTimeout(comingSoonTimerRef.current);
+      }
     };
   }, []);
 
@@ -1013,69 +1082,101 @@ export default function Home() {
   }
 
   function handleRegionChange(nextRegion: RegionKey) {
-    if (!isLiveRegion(nextRegion)) return;
+    const option = REGION_OPTIONS.find((r) => r.key === nextRegion);
+
+    if (!option) return;
+
+    if (option.status !== "live") {
+      showComingSoon(`${option.name} is coming soon.`);
+      return;
+    }
 
     setRegion(nextRegion);
 
     if (nextRegion === "mercosur") {
       const nextCountry = MERCOSUR_COUNTRIES.some((c) => c.key === country) ? country : DEFAULT_COUNTRY;
       setCountry(nextCountry);
-      loadTopStories(range, nextCountry, headlineLimit);
+      loadTopStories(nextRegion, range, nextCountry, headlineLimit);
     }
   }
 
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
   const selectedCountryName = countryOptions.find((c) => c.key === country)?.name || "Uruguay";
-  const installButtonLabel = installEvent ? "Install" : "How to install";
 
   return (
     <main className="mx-auto max-w-6xl overflow-x-hidden px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
       <section className="relative overflow-hidden rounded-3xl border border-gray-200/80 bg-white/80 px-5 py-6 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/40 sm:px-7 sm:py-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.10),transparent_32%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_32%)]" />
 
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="relative flex flex-col gap-4">
           <div className="min-w-0">
             <h1 className="break-words text-5xl font-extrabold leading-[0.95] tracking-tight text-gray-950 dark:text-white sm:text-6xl">
               <span className="text-blue-500">{selectedRegionName}</span> News
             </h1>
 
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400 sm:text-base">
-              Your Source for English Regional Information
-            </p>
-          </div>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400 sm:text-base">
+                Your Source for English Regional Information
+              </p>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <button
-              onClick={() => setInfoOpen(true)}
-              aria-label="Info"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-sm text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
-            >
-              <span className="italic font-semibold">i</span>
-            </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  onClick={() => setInfoOpen(true)}
+                  aria-label="Info"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
+                >
+                  <InfoIcon />
+                </button>
 
-            {!standalone ? (
-              <button
-                onClick={handleInstallClick}
-                className="inline-flex min-h-11 items-center rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
-                title={installEvent ? "Install this app" : "View manual install instructions"}
-              >
-                {installButtonLabel}
-              </button>
-            ) : null}
-
-            <button
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              className="inline-flex min-h-11 items-center rounded-full border border-gray-900 bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-            >
-              {mounted ? (theme === "dark" ? "Light mode" : "Dark mode") : "Theme"}
-            </button>
+                <button
+                  onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                >
+                  {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
+                  <span>{mounted ? (theme === "dark" ? "Light" : "Dark") : "Theme"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="mt-8 rounded-3xl border border-gray-200 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-6">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <button
+              className="inline-flex h-9 items-center rounded-full border border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
+              onClick={() => setFiltersOpen(true)}
+              title="Open filters"
+            >
+              Filters
+            </button>
+
+            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+              Region: {selectedRegionName}
+            </span>
+            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+              Country: {selectedCountryName}
+            </span>
+            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+              Range: {range === "24h" ? "24h" : range === "3d" ? "3 Days" : range === "7d" ? "7 Days" : "30 Days"}
+            </span>
+            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+              Category: {category === "all" ? "All categories" : category}
+            </span>
+            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
+              Limit: Top {headlineLimit}
+            </span>
+          </div>
+
+          {comingSoonMessage ? (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+              {comingSoonMessage}
+            </div>
+          ) : null}
+
+          <div className="flex items-center gap-3">
             <div className="flex-1">
               <label className="sr-only">Search</label>
               <input
@@ -1093,41 +1194,13 @@ export default function Home() {
               />
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                className="h-11 shrink-0 rounded-xl border border-gray-900 bg-gray-900 px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-                onClick={performSearchAction}
-                title="Search (filters as you type)"
-              >
-                Search
-              </button>
-
-              <button
-                className="h-11 shrink-0 rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
-                onClick={() => setFiltersOpen(true)}
-                title="Open filters"
-              >
-                Filters
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Region: {selectedRegionName}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Country: {selectedCountryName}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Range: {range === "24h" ? "24h" : range === "3d" ? "3 Days" : range === "7d" ? "7 Days" : "30 Days"}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Category: {category === "all" ? "All categories" : category}
-            </span>
-            <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-              Limit: Top {headlineLimit}
-            </span>
+            <button
+              className="h-11 shrink-0 rounded-xl border border-gray-900 bg-gray-900 px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
+              onClick={performSearchAction}
+              title="Search (filters as you type)"
+            >
+              Search
+            </button>
           </div>
         </div>
       </section>
@@ -1200,7 +1273,7 @@ export default function Home() {
                 ) : null}
               </div>
               <button
-                onClick={() => loadTopStories(range, country, headlineLimit)}
+                onClick={() => loadTopStories(region, range, country, headlineLimit)}
                 className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-900 bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
               >
                 Retry
@@ -1372,7 +1445,7 @@ export default function Home() {
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
                   {regionOptionsForUi.map((r) => (
-                    <option key={r.key} value={r.key} disabled={r.status !== "live"}>
+                    <option key={r.key} value={r.key}>
                       {r.status === "live" ? r.name : `${r.name} (coming soon)`}
                     </option>
                   ))}
@@ -1384,9 +1457,9 @@ export default function Home() {
                 <select
                   value={country}
                   onChange={(e) => {
-                    const val = e.target.value as CountryOption["key"];
+                    const val = e.target.value as CountryKey;
                     setCountry(val);
-                    loadTopStories(range, val, headlineLimit);
+                    loadTopStories(region, range, val, headlineLimit);
                   }}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
@@ -1405,7 +1478,7 @@ export default function Home() {
                   onChange={(e) => {
                     const val = e.target.value;
                     setRange(val);
-                    loadTopStories(val, country, headlineLimit);
+                    loadTopStories(region, val, country, headlineLimit);
                   }}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
@@ -1439,7 +1512,7 @@ export default function Home() {
                   onChange={(e) => {
                     const val = Number(e.target.value) as HeadlineLimit;
                     setHeadlineLimit(val);
-                    loadTopStories(range, country, val);
+                    loadTopStories(region, range, country, val);
                   }}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
