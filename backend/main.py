@@ -40,14 +40,33 @@ app.add_middleware(
 )
 
 # ----------------------------
-# Source config (single source of truth)
+# Regions / source config
 # ----------------------------
-# Mercosur bloc (as requested): UY, AR, BR, PY, BO + MercoPress ("mp") + "all"
+REGIONS_META: Dict[str, Dict[str, Any]] = {
+    "mercosur": {
+        "key": "mercosur",
+        "name": "Mercosur",
+        "status": "live",
+    },
+    "mexico": {
+        "key": "mexico",
+        "name": "Mexico",
+        "status": "coming-soon",
+    },
+    "central-america": {
+        "key": "central-america",
+        "name": "Central America",
+        "status": "coming-soon",
+    },
+}
+
+# Mercosur bloc (requested): UY, AR, BR, PY, BO + MercoPress ("mp") + "all"
 SOURCES: List[Dict[str, Any]] = [
     # --- Uruguay (UY) ---
     {
         "id": "montevideo_portal",
         "name": "Montevideo Portal",
+        "region_key": "mercosur",
         "country_key": "uy",
         "country_code": "UY",
         "country_flag_url": "https://flagcdn.com/w40/uy.png",
@@ -57,6 +76,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "el_observador_uy",
         "name": "El Observador (UY)",
+        "region_key": "mercosur",
         "country_key": "uy",
         "country_code": "UY",
         "country_flag_url": "https://flagcdn.com/w40/uy.png",
@@ -67,16 +87,17 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "lanacion_ar",
         "name": "La Nación (AR)",
+        "region_key": "mercosur",
         "country_key": "ar",
         "country_code": "AR",
         "country_flag_url": "https://flagcdn.com/w40/ar.png",
         "source_logo": "https://www.lanacion.com.ar/favicon.ico",
         "feed_url": "https://www.lanacion.com.ar/arc/outboundfeeds/rss/?outputType=xml",
     },
-    # Clarín rss.html is an index and often not well-formed; Lo Último is a proper feed
     {
         "id": "clarin_ar_lo_ultimo",
         "name": "Clarín (AR) - Lo Último",
+        "region_key": "mercosur",
         "country_key": "ar",
         "country_code": "AR",
         "country_flag_url": "https://flagcdn.com/w40/ar.png",
@@ -87,6 +108,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "g1_br",
         "name": "G1 (BR)",
+        "region_key": "mercosur",
         "country_key": "br",
         "country_code": "BR",
         "country_flag_url": "https://flagcdn.com/w40/br.png",
@@ -96,6 +118,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "uol_br",
         "name": "UOL (BR)",
+        "region_key": "mercosur",
         "country_key": "br",
         "country_code": "BR",
         "country_flag_url": "https://flagcdn.com/w40/br.png",
@@ -106,6 +129,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "abccolor_py",
         "name": "ABC Color (PY)",
+        "region_key": "mercosur",
         "country_key": "py",
         "country_code": "PY",
         "country_flag_url": "https://flagcdn.com/w40/py.png",
@@ -116,6 +140,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "radiofides_bo",
         "name": "Radio Fides (BO)",
+        "region_key": "mercosur",
         "country_key": "bo",
         "country_code": "BO",
         "country_flag_url": "https://flagcdn.com/w40/bo.png",
@@ -125,6 +150,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "radiofides_bo_nacional",
         "name": "Radio Fides - Nacional (BO)",
+        "region_key": "mercosur",
         "country_key": "bo",
         "country_code": "BO",
         "country_flag_url": "https://flagcdn.com/w40/bo.png",
@@ -134,16 +160,18 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "lapatria_bo",
         "name": "La Patria (BO)",
+        "region_key": "mercosur",
         "country_key": "bo",
         "country_code": "BO",
         "country_flag_url": "https://flagcdn.com/w40/bo.png",
         "source_logo": "https://lapatria.bo/favicon.ico",
         "feed_url": "https://lapatria.bo/feed/",
     },
-    # --- MercoPress (Mercosur bloc) ---
+    # --- MercoPress ---
     {
         "id": "mercopress_mercosur",
         "name": "MercoPress (Mercosur)",
+        "region_key": "mercosur",
         "country_key": "mp",
         "country_code": "MP",
         "country_flag_url": None,
@@ -151,6 +179,27 @@ SOURCES: List[Dict[str, Any]] = [
         "feed_url": "https://en.mercopress.com/rss/mercosur",
     },
 ]
+
+REGION_COUNTRY_META: Dict[str, Dict[str, Dict[str, str]]] = {
+    "mercosur": {
+        "all": {"code": "ALL", "name": "All Mercosur", "flag_url": ""},
+        "mp": {"code": "MP", "name": "MercoPress", "flag_url": ""},
+        "uy": {"code": "UY", "name": "Uruguay", "flag_url": "https://flagcdn.com/w40/uy.png"},
+        "ar": {"code": "AR", "name": "Argentina", "flag_url": "https://flagcdn.com/w40/ar.png"},
+        "br": {"code": "BR", "name": "Brazil", "flag_url": "https://flagcdn.com/w40/br.png"},
+        "py": {"code": "PY", "name": "Paraguay", "flag_url": "https://flagcdn.com/w40/py.png"},
+        "bo": {"code": "BO", "name": "Bolivia", "flag_url": "https://flagcdn.com/w40/bo.png"},
+    },
+    "mexico": {
+        "mx": {"code": "MX", "name": "Mexico", "flag_url": "https://flagcdn.com/w40/mx.png"},
+    },
+    "central-america": {
+        "all": {"code": "ALL", "name": "All Central America", "flag_url": ""},
+    },
+}
+
+LIVE_REGION_KEYS = {k for k, v in REGIONS_META.items() if v.get("status") == "live"}
+DEFAULT_REGION_KEY = "mercosur"
 
 # ----------------------------
 # SQLite cache
@@ -166,7 +215,6 @@ def _db() -> sqlite3.Connection:
 
 def _init_db() -> None:
     with _db() as conn:
-        # Existing link-based enrichment cache (kept)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS enrich_cache (
@@ -178,7 +226,6 @@ def _init_db() -> None:
             """
         )
 
-        # cluster-level enrichment cache (cluster_id -> title_en/summary_en)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS cluster_enrich_cache (
@@ -190,7 +237,6 @@ def _init_db() -> None:
             """
         )
 
-        # cluster metadata cache (cluster_id -> keywords/entities/confidence)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS cluster_meta_cache (
@@ -203,7 +249,6 @@ def _init_db() -> None:
             """
         )
 
-        # cached /top payloads (country+range+q+limit -> payload_json)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS top_cache (
@@ -303,11 +348,6 @@ def _matches_q(article: Dict[str, Any], q: str) -> bool:
 
 
 def _strip_internal_fields(obj: Any) -> Any:
-    """
-    Removes internal helper fields from API payloads.
-    Rule: drop any dict keys starting with "_" (ex: "_kws", "_topic_debug").
-    Works recursively for nested dicts/lists.
-    """
     if isinstance(obj, dict):
         cleaned: Dict[str, Any] = {}
         for k, v in obj.items():
@@ -318,6 +358,41 @@ def _strip_internal_fields(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_strip_internal_fields(x) for x in obj]
     return obj
+
+
+def _normalize_region(region: Optional[str]) -> str:
+    r = (region or DEFAULT_REGION_KEY).strip().lower()
+    if not r:
+        r = DEFAULT_REGION_KEY
+    if r not in REGIONS_META:
+        raise HTTPException(status_code=400, detail=f"Invalid region. Use one of: {','.join(REGIONS_META.keys())}")
+    return r
+
+
+def _require_live_region(region: str) -> str:
+    r = _normalize_region(region)
+    if r not in LIVE_REGION_KEYS:
+        raise HTTPException(status_code=404, detail=f"Region '{r}' is not live yet.")
+    return r
+
+
+def _valid_country_keys_for_region(region: str) -> set:
+    r = _normalize_region(region)
+    meta = REGION_COUNTRY_META.get(r) or {}
+    keys = set(meta.keys())
+    if r == "mercosur":
+        keys.update({"all", "mp", "uy", "ar", "br", "py", "bo"})
+    return keys
+
+
+def _normalize_country_for_region(region: str, country: Optional[str]) -> str:
+    r = _require_live_region(region)
+    c = (country or "uy").strip().lower() if r == "mercosur" else (country or "").strip().lower()
+    if r == "mercosur" and not c:
+        c = "uy"
+    if c not in _valid_country_keys_for_region(r):
+        raise HTTPException(status_code=400, detail=f"Invalid country for region '{r}'.")
+    return c
 
 
 # ----------------------------
@@ -387,7 +462,7 @@ def _set_cached_enrich(link: str, title_en: str, summary_en: str) -> None:
 # ----------------------------
 def _cluster_enrich_ttl_s() -> int:
     try:
-        return int((os.getenv("CLUSTER_ENRICH_TTL_S") or "86400").strip())  # 24h default
+        return int((os.getenv("CLUSTER_ENRICH_TTL_S") or "86400").strip())
     except Exception:
         return 86400
 
@@ -463,7 +538,7 @@ def _set_cached_cluster_enrich(cluster_id: str, title_en: str, summary_en: str) 
 
 
 # ----------------------------
-# Cluster meta cache helpers (keywords/entities/confidence)
+# Cluster meta cache helpers
 # ----------------------------
 def _set_cluster_meta(cluster_id: str, keywords: List[str], entities: List[str], confidence: float) -> None:
     cid = (cluster_id or "").strip()
@@ -499,7 +574,7 @@ def _set_cluster_meta(cluster_id: str, keywords: List[str], entities: List[str],
 
 
 # ----------------------------
-# /top payload cache (SQLite TTL)
+# /top payload cache
 # ----------------------------
 def _top_ttl_s() -> int:
     try:
@@ -515,12 +590,13 @@ def _top_cache_max_rows() -> int:
         return 300
 
 
-def _top_cache_key(country: str, range: str, q: str, limit: int) -> str:
+def _top_cache_key(region: str, country: str, range: str, q: str, limit: int) -> str:
+    rg = (region or "").strip().lower()
     c = (country or "").strip().lower()
     r = (range or "").strip().lower()
     qq = (q or "").strip().lower()
     lim = int(limit)
-    return f"top|country={c}|range={r}|q={qq}|limit={lim}"
+    return f"top|region={rg}|country={c}|range={r}|q={qq}|limit={lim}"
 
 
 def _top_cache_get(cache_key: str) -> Optional[Tuple[Dict[str, Any], int]]:
@@ -600,9 +676,6 @@ def _top_cache_set(cache_key: str, payload: Dict[str, Any]) -> None:
 
 
 def _inject_cluster_cache_into_payload(payload: Dict[str, Any]) -> None:
-    """
-    Inject fresh cluster_enrich_cache into best_item at return time.
-    """
     try:
         clusters = payload.get("clusters") or []
         if not isinstance(clusters, list):
@@ -618,7 +691,7 @@ def _inject_cluster_cache_into_payload(payload: Dict[str, Any]) -> None:
             if not isinstance(best_item, dict):
                 continue
 
-            if (best_item.get("title_en") and best_item.get("summary_en")):
+            if best_item.get("title_en") and best_item.get("summary_en"):
                 continue
 
             cached_cluster = _get_fresh_cluster_enrich(cid)
@@ -633,7 +706,7 @@ def _inject_cluster_cache_into_payload(payload: Dict[str, Any]) -> None:
 
 
 # ----------------------------
-# /news TTL cache (in-memory)
+# /news TTL cache
 # ----------------------------
 _NEWS_CACHE_LOCK = threading.Lock()
 _NEWS_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -692,7 +765,7 @@ def _news_cache_set(key: str, payload: Dict[str, Any]) -> None:
 
 
 # ----------------------------
-# Simple rate limit – protects /enrich from abuse + protects your OpenAI spend
+# Simple rate limit
 # ----------------------------
 _RATE_LOCK = threading.Lock()
 _RATE_BUCKETS: Dict[str, List[float]] = {}
@@ -731,12 +804,6 @@ def _client_ip(req: Request) -> str:
 
 
 def _rate_limit_check(req: Request) -> None:
-    """
-    Very simple rolling window limiter:
-    - ENRICH_RATE_LIMIT_ENABLED (default true)
-    - ENRICH_RPM (default 30)
-    - ENRICH_WINDOW_S (default 60)
-    """
     if not _env_bool("ENRICH_RATE_LIMIT_ENABLED", default=True):
         return
 
@@ -837,10 +904,6 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     if not c:
         return None
 
-    # ----------------------------
-    # High-impact "World/Conflict" mappings
-    # Handles categories like: "Conflicto en Medio Oriente"
-    # ----------------------------
     if any(x in c for x in ["conflicto", "guerra", "invasion", "invasión", "tension", "tensión"]):
         if any(
             x in c
@@ -890,15 +953,9 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     ):
         return "World"
 
-    # ----------------------------
-    # Environment / Weather mappings
-    # ----------------------------
     if any(x in c for x in ["clima", "meteorolog", "meteorologí", "tiempo", "pronostico", "pronóstico", "inumet"]):
         return "Environment"
 
-    # ----------------------------
-    # Original mappings
-    # ----------------------------
     if any(
         x in c
         for x in [
@@ -1092,6 +1149,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
         "published": entry.get("published") or entry.get("updated") or (published_dt.isoformat() if published_dt else ""),
         "published_utc": published_utc,
         "source": source["name"],
+        "region_key": source.get("region_key"),
         "country_key": source.get("country_key"),
         "country_code": source.get("country_code"),
         "country_flag_url": source.get("country_flag_url"),
@@ -1112,7 +1170,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
 
 
 # ----------------------------
-# Deduplication (kept)
+# Deduplication
 # ----------------------------
 _NON_WORD = re.compile(r"[^a-z0-9\s]")
 
@@ -1137,9 +1195,6 @@ def _day_bucket(published_utc: Optional[str]) -> str:
 
 
 def _sig(article: Dict[str, Any]) -> str:
-    """
-    v1 signature (kept for backwards compatibility, but /top and /clusters use v2 clustering IDs).
-    """
     ck = (article.get("country_key") or "").lower() or "x"
     day = _day_bucket(article.get("published_utc"))
     nt = _norm_title(article.get("title") or "")
@@ -1179,27 +1234,22 @@ def _dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 # ----------------------------
-# Smarter clustering v2 (bucket -> similarity merge)
+# Smarter clustering v2
 # ----------------------------
 _STOPWORDS = set(
     [
-        # Spanish
         "de", "la", "el", "los", "las", "y", "o", "u", "a", "en", "por", "para", "con", "sin",
         "del", "al", "un", "una", "unos", "unas", "que", "se", "su", "sus", "ya", "como", "más",
         "menos", "también", "pero", "tras", "ante", "sobre", "entre", "desde", "hasta",
-        # Portuguese
         "de", "da", "do", "das", "dos", "e", "ou", "a", "o", "os", "as", "em", "por", "para",
         "com", "sem", "um", "uma", "uns", "umas", "que", "se", "sua", "suas", "seu", "seus",
         "como", "mais", "menos", "tambem", "mas", "entre", "desde", "ate",
-        # English
         "the", "and", "or", "to", "in", "on", "for", "with", "without", "of", "a", "an", "as",
         "is", "are", "was", "were", "be", "been", "by", "from", "at", "this", "that", "these", "those",
     ]
 )
 
 _TOKEN_RE = re.compile(r"[a-z0-9áéíóúüñçãõâêîôûàèìòù]+", re.IGNORECASE)
-
-# Entity heuristic: sequences of 2-5 capitalized words
 _ENTITY_SEQ_RE = re.compile(
     r"\b([A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+(?:\s+[A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+){1,4})\b"
 )
@@ -1443,70 +1493,16 @@ def _cluster_items_v2(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 # ----------------------------
-# Topic labeling v5 (category-first, scoring fallback)
+# Topic labeling v5
 # ----------------------------
 GENERAL_LABEL = "General"
-
 MIN_SCORE = 4.0
 MIN_MARGIN = 1.25
 STRONG_WIN_SCORE = 8.5
-
 SPORTS_MIN_SCORE = 6.0
 SPORTS_REQUIRE_ANCHOR = True
+_SCORE_PATTERN = re.compile(r"\b\d{1,2}\s*[-–:]\s*\d{1,2}\b")
 
-_SCORE_PATTERN = re.compile(r"\b\d{1,2}\s*[-–:]\s*\d{1,2}\b")  # 2-1, 3:0
-
-
-def _norm_text_for_topic(text: str) -> str:
-    if not text:
-        return ""
-    t = text.lower().strip()
-    t = unicodedata.normalize("NFKD", t)
-    t = "".join(ch for ch in t if not unicodedata.combining(ch))
-    t = re.sub(r"\s+", " ", t)
-    return t
-
-
-def _count_phrase_hits(text: str, phrase: str) -> int:
-    if not phrase:
-        return 0
-    if " " in phrase:
-        return 1 if phrase in text else 0
-    return len(re.findall(rf"\b{re.escape(phrase)}\b", text))
-
-
-def _score_category(text: str, rules: Dict[str, Dict[str, float]]) -> Tuple[float, List[str]]:
-    score = 0.0
-    matched: List[str] = []
-
-    for phrase, w in (rules.get("strong") or {}).items():
-        hits = _count_phrase_hits(text, phrase)
-        if hits:
-            score += w * hits
-            matched.append(f"+{phrase}")
-
-    for phrase, w in (rules.get("keywords") or {}).items():
-        hits = _count_phrase_hits(text, phrase)
-        if hits:
-            score += w * hits
-            matched.append(f"+{phrase}")
-
-    for phrase, pen in (rules.get("negative") or {}).items():
-        hits = _count_phrase_hits(text, phrase)
-        if hits:
-            score -= abs(pen) * hits
-            matched.append(f"-{phrase}")
-
-    distinct_positive = len([m for m in matched if m.startswith("+")])
-    if distinct_positive >= 3:
-        score += 1.0
-    elif distinct_positive == 2:
-        score += 0.5
-
-    return score, matched
-
-
-# Keeping your CATEGORY_RULES exactly (unchanged)
 CATEGORY_RULES: Dict[str, Dict[str, Dict[str, float]]] = {
     "Politics": {
         "strong": {
@@ -1894,53 +1890,65 @@ CATEGORY_RULES: Dict[str, Dict[str, Dict[str, float]]] = {
 }
 
 SPORTS_ANCHORS = [
-    "futbol",
-    "futebol",
-    "basquet",
-    "basket",
-    "baloncesto",
-    "tenis",
-    "rugby",
-    "golf",
-    "nba",
-    "nfl",
-    "mlb",
-    "nhl",
-    "formula 1",
-    "motogp",
-    "copa libertadores",
-    "sudamericana",
-    "eliminatorias",
-    "gol",
-    "entrenador",
-    "jugador",
-    "fixture",
-    "penarol",
-    "peñarol",
-    "boca",
-    "river",
-    "flamengo",
-    "gremio",
-    "grêmio",
-    "palmeiras",
+    "futbol", "futebol", "basquet", "basket", "baloncesto", "tenis", "rugby", "golf",
+    "nba", "nfl", "mlb", "nhl", "formula 1", "motogp", "copa libertadores", "sudamericana",
+    "eliminatorias", "gol", "entrenador", "jugador", "fixture", "penarol", "peñarol",
+    "boca", "river", "flamengo", "gremio", "grêmio", "palmeiras",
 ]
 
 NON_SPORTS_DOMINATORS = [
-    "presidente",
-    "gobierno",
-    "parlamento",
-    "senado",
-    "diputados",
-    "ministerio",
-    "banco central",
-    "inflacion",
-    "pib",
-    "deuda",
-    "impuestos",
-    "decreto",
-    "fiscalia",
-    "justicia",
+    "presidente", "gobierno", "parlamento", "senado", "diputados", "ministerio",
+    "banco central", "inflacion", "pib", "deuda", "impuestos", "decreto", "fiscalia", "justicia",
 ]
+
+
+def _norm_text_for_topic(text: str) -> str:
+    if not text:
+        return ""
+    t = text.lower().strip()
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join(ch for ch in t if not unicodedata.combining(ch))
+    t = re.sub(r"\s+", " ", t)
+    return t
+
+
+def _count_phrase_hits(text: str, phrase: str) -> int:
+    if not phrase:
+        return 0
+    if " " in phrase:
+        return 1 if phrase in text else 0
+    return len(re.findall(rf"\b{re.escape(phrase)}\b", text))
+
+
+def _score_category(text: str, rules: Dict[str, Dict[str, float]]) -> Tuple[float, List[str]]:
+    score = 0.0
+    matched: List[str] = []
+
+    for phrase, w in (rules.get("strong") or {}).items():
+        hits = _count_phrase_hits(text, phrase)
+        if hits:
+            score += w * hits
+            matched.append(f"+{phrase}")
+
+    for phrase, w in (rules.get("keywords") or {}).items():
+        hits = _count_phrase_hits(text, phrase)
+        if hits:
+            score += w * hits
+            matched.append(f"+{phrase}")
+
+    for phrase, pen in (rules.get("negative") or {}).items():
+        hits = _count_phrase_hits(text, phrase)
+        if hits:
+            score -= abs(pen) * hits
+            matched.append(f"-{phrase}")
+
+    distinct_positive = len([m for m in matched if m.startswith("+")])
+    if distinct_positive >= 3:
+        score += 1.0
+    elif distinct_positive == 2:
+        score += 0.5
+
+    return score, matched
 
 
 def _topic_label(a: Dict[str, Any]) -> str:
@@ -2010,7 +2018,7 @@ def _topic_label(a: Dict[str, Any]) -> str:
 
 
 # ----------------------------
-# Ranking v2 (tunable + explainable)
+# Ranking v2
 # ----------------------------
 def _rank_weights() -> Dict[str, float]:
     return {
@@ -2251,45 +2259,67 @@ def healthz():
     }
 
 
+@app.get("/regions")
+def get_regions():
+    regions = []
+    for key in ["mercosur", "mexico", "central-america"]:
+        meta = REGIONS_META[key]
+        source_count = sum(1 for s in SOURCES if (s.get("region_key") or "").lower() == key)
+        regions.append(
+            {
+                "key": meta["key"],
+                "name": meta["name"],
+                "status": meta["status"],
+                "source_count": source_count,
+            }
+        )
+    return {"regions": regions}
+
+
 @app.get("/countries")
-def get_countries():
-    meta = {
-        "all": {"code": "ALL", "name": "All Mercosur", "flag_url": ""},
-        "mp": {"code": "MP", "name": "MercoPress", "flag_url": ""},
-        "uy": {"code": "UY", "name": "Uruguay", "flag_url": "https://flagcdn.com/w40/uy.png"},
-        "ar": {"code": "AR", "name": "Argentina", "flag_url": "https://flagcdn.com/w40/ar.png"},
-        "br": {"code": "BR", "name": "Brazil", "flag_url": "https://flagcdn.com/w40/br.png"},
-        "py": {"code": "PY", "name": "Paraguay", "flag_url": "https://flagcdn.com/w40/py.png"},
-        "bo": {"code": "BO", "name": "Bolivia", "flag_url": "https://flagcdn.com/w40/bo.png"},
-    }
+def get_countries(region: str = DEFAULT_REGION_KEY):
+    r = _normalize_region(region)
+    meta = REGION_COUNTRY_META.get(r) or {}
 
     counts: Dict[str, int] = {k: 0 for k in meta.keys()}
     for s in SOURCES:
+        sk_region = (s.get("region_key") or "").lower()
+        if sk_region != r:
+            continue
         ck = (s.get("country_key") or "").lower()
         if ck in counts:
             counts[ck] += 1
 
-    counts["all"] = len(SOURCES)
+    if r == "mercosur":
+        counts["all"] = sum(1 for s in SOURCES if (s.get("region_key") or "").lower() == "mercosur")
 
     countries = []
-    for key in ["all", "mp", "uy", "ar", "br", "py", "bo"]:
+    for key, info in meta.items():
         countries.append(
             {
                 "key": key,
-                "code": meta[key]["code"],
-                "name": meta[key]["name"],
-                "flag_url": meta[key]["flag_url"],
+                "code": info["code"],
+                "name": info["name"],
+                "flag_url": info["flag_url"],
                 "source_count": counts.get(key, 0),
             }
         )
 
-    return {"countries": countries}
+    return {"region": r, "countries": countries}
 
 
 @app.get("/debug-sources")
-def debug_sources():
+def debug_sources(region: Optional[str] = None):
+    normalized_region = None
+    if region is not None and region.strip():
+        normalized_region = _normalize_region(region)
+
     out = []
     for s in SOURCES:
+        s_region = (s.get("region_key") or "").lower()
+        if normalized_region and s_region != normalized_region:
+            continue
+
         try:
             feed = _fetch_feed(s["feed_url"])
             entries_found = len(feed.entries or [])
@@ -2297,6 +2327,7 @@ def debug_sources():
             bozo_exc = getattr(feed, "bozo_exception", None)
             out.append(
                 {
+                    "region_key": s.get("region_key"),
                     "source": s["name"],
                     "source_id": s.get("id"),
                     "feed": s["feed_url"],
@@ -2312,6 +2343,7 @@ def debug_sources():
         except Exception as e:
             out.append(
                 {
+                    "region_key": s.get("region_key"),
                     "source": s["name"],
                     "source_id": s.get("id"),
                     "feed": s["feed_url"],
@@ -2329,24 +2361,30 @@ def debug_sources():
 
 @app.get("/uy-news")
 def get_uruguay_news(range: str = "24h", q: str = "", limit: int = 50):
-    return get_news(country="uy", range=range, q=q, limit=limit)
+    return get_news(region="mercosur", country="uy", range=range, q=q, limit=limit)
 
 
-def _collect_items(country: str, range: str, q: str, scan_cap: int = 999999) -> List[Dict[str, Any]]:
-    c = (country or "uy").strip().lower()
+def _collect_items(region: str, country: str, range: str, q: str, scan_cap: int = 999999) -> List[Dict[str, Any]]:
+    r = _require_live_region(region)
+    c = _normalize_country_for_region(r, country)
     since = _range_to_since(range)
-
-    if c not in {"uy", "ar", "br", "py", "bo", "all", "mp"}:
-        raise HTTPException(status_code=400, detail="Invalid country. Use uy|ar|br|py|bo|mp|all")
 
     items: List[Dict[str, Any]] = []
 
     for source in SOURCES:
+        source_region = (source.get("region_key") or "").lower()
         ck = (source.get("country_key") or "").lower()
 
-        if c == "all":
-            if ck not in {"uy", "ar", "br", "py", "bo", "mp"}:
-                continue
+        if source_region != r:
+            continue
+
+        if r == "mercosur":
+            if c == "all":
+                if ck not in {"uy", "ar", "br", "py", "bo", "mp"}:
+                    continue
+            else:
+                if ck != c:
+                    continue
         else:
             if ck != c:
                 continue
@@ -2382,25 +2420,27 @@ def _collect_items(country: str, range: str, q: str, scan_cap: int = 999999) -> 
     return items
 
 
-def _hard_cap_limit(country_key: str, lim: int) -> int:
+def _hard_cap_limit(region_key: str, country_key: str, lim: int) -> int:
+    r = (region_key or "").strip().lower()
     c = (country_key or "").strip().lower()
-    if c == "all":
+    if r == "mercosur" and c == "all":
         return max(1, min(lim, 200))
     return max(1, min(lim, 200))
 
 
 @app.get("/news")
-def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 50):
-    c = (country or "uy").strip().lower()
+def get_news(region: str = DEFAULT_REGION_KEY, country: str = "uy", range: str = "24h", q: str = "", limit: int = 50):
+    r = _require_live_region(region)
+    c = _normalize_country_for_region(r, country)
 
     try:
         lim = int(limit)
     except Exception:
         lim = 50
 
-    lim = _hard_cap_limit(c, lim)
+    lim = _hard_cap_limit(r, c, lim)
 
-    cache_key = f"country={c}|range={range}|q={q}|limit={lim}"
+    cache_key = f"region={r}|country={c}|range={range}|q={q}|limit={lim}"
     cached = _news_cache_get(cache_key)
     if cached:
         payload, age_s = cached
@@ -2410,11 +2450,11 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
         return payload
 
     scan_cap = min(2000, max(200, lim * 10))
-    items = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
+    items = _collect_items(region=r, country=c, range=range, q=q, scan_cap=scan_cap)
     items = _dedupe(items)
 
     for a in items:
-        a["cluster_id"] = _sig(a)  # legacy for /news
+        a["cluster_id"] = _sig(a)
         a["topic"] = _topic_label(a)
         score, factors = _rank_score_and_factors(a)
         a["rank_score"] = score
@@ -2426,7 +2466,7 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
     )
 
     items = items[:lim]
-    resp = {"country": c, "range": range, "q": q, "limit": lim, "count": len(items), "articles": items}
+    resp = {"region": r, "country": c, "range": range, "q": q, "limit": lim, "count": len(items), "articles": items}
     _news_cache_set(cache_key, resp)
 
     resp["cache_hit"] = False
@@ -2436,18 +2476,19 @@ def get_news(country: str = "uy", range: str = "24h", q: str = "", limit: int = 
 
 
 @app.get("/clusters")
-def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: int = 50):
-    c = (country or "uy").strip().lower()
+def get_clusters(region: str = DEFAULT_REGION_KEY, country: str = "uy", range: str = "24h", q: str = "", limit: int = 50):
+    r = _require_live_region(region)
+    c = _normalize_country_for_region(r, country)
 
     try:
         lim = int(limit)
     except Exception:
         lim = 50
 
-    lim = _hard_cap_limit(c, lim)
+    lim = _hard_cap_limit(r, c, lim)
 
     scan_cap = min(3000, max(300, lim * 12))
-    raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
+    raw = _collect_items(region=r, country=c, range=range, q=q, scan_cap=scan_cap)
 
     for it in raw:
         it["topic"] = _topic_label(it)
@@ -2485,33 +2526,24 @@ def get_clusters(country: str = "uy", range: str = "24h", q: str = "", limit: in
     )
 
     clusters = clusters[:lim]
-    payload = {"country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
+    payload = {"region": r, "country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
     payload = _strip_internal_fields(payload)
     return payload
 
 
 @app.get("/top")
-def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 30):
-    """
-    Top Stories: cluster-first feed intended for the homepage.
-
-    Includes:
-    - SQLite TTL cache for the whole /top response
-    - cluster_enrich_cache injection (applies to cached payloads)
-    - Smarter clustering v2 with confidence/keywords/entities
-    - Cluster-level ranking polish for better homepage ordering
-    - Strips internal fields from API output
-    """
-    c = (country or "uy").strip().lower()
+def get_top(region: str = DEFAULT_REGION_KEY, country: str = "uy", range: str = "24h", q: str = "", limit: int = 30):
+    r = _require_live_region(region)
+    c = _normalize_country_for_region(r, country)
 
     try:
         lim = int(limit)
     except Exception:
         lim = 30
 
-    lim = _hard_cap_limit(c, lim)
+    lim = _hard_cap_limit(r, c, lim)
 
-    cache_key = _top_cache_key(c, range, q, lim)
+    cache_key = _top_cache_key(r, c, range, q, lim)
     cached = _top_cache_get(cache_key)
     if cached:
         payload, age_s = cached
@@ -2526,7 +2558,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
         return payload
 
     scan_cap = min(3000, max(300, lim * 14))
-    raw = _collect_items(country=c, range=range, q=q, scan_cap=scan_cap)
+    raw = _collect_items(region=r, country=c, range=range, q=q, scan_cap=scan_cap)
 
     for it in raw:
         it["topic"] = _topic_label(it)
@@ -2541,6 +2573,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
         best = cobj.get("best_item")
         if not isinstance(best, dict):
             continue
+
         cached_cluster = _get_fresh_cluster_enrich(cid)
         if cached_cluster:
             best["title_en"] = cached_cluster.get("title_en") or ""
@@ -2563,7 +2596,7 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
     )
 
     clusters = clusters[:lim]
-    payload = {"country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
+    payload = {"region": r, "country": c, "range": range, "q": q, "limit": lim, "count": len(clusters), "clusters": clusters}
 
     _top_cache_set(cache_key, payload)
 
@@ -2577,12 +2610,6 @@ def get_top(country: str = "uy", range: str = "24h", q: str = "", limit: int = 3
 
 @app.post("/enrich")
 def enrich_items(req: EnrichRequest, request: Request):
-    """
-    Cluster-aware enrichment:
-    - If cluster_id is provided and fresh cluster cache exists -> return without OpenAI.
-    - Otherwise fall back to link cache.
-    - If OpenAI is used and cluster_id exists -> write cluster cache too.
-    """
     _rate_limit_check(request)
 
     if not req.items:
@@ -2707,7 +2734,7 @@ def enrich_items(req: EnrichRequest, request: Request):
 
 
 # ----------------------------
-# Background Pre-Enrichment Worker (cluster-aware)
+# Background Pre-Enrichment Worker
 # ----------------------------
 _worker_lock = threading.Lock()
 _worker_running = False
@@ -2727,11 +2754,6 @@ def _env_list(key: str, default_csv: str) -> List[str]:
 
 
 def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
-    """
-    Cluster-aware internal enrichment used by the background worker.
-    - Skips if cluster cache already exists (fresh).
-    - Writes cluster cache + also writes link cache for the best_item link.
-    """
     if not items:
         return 0
 
@@ -2839,6 +2861,10 @@ def _worker_loop() -> None:
     interval_s = _env_int("PRE_ENRICH_INTERVAL_S", _env_int("PRE_ENRICH_INTERVAL_SECONDS", 180))
     startup_delay_s = _env_int("PRE_ENRICH_STARTUP_DELAY_S", _env_int("PRE_ENRICH_STARTUP_DELAY_SECONDS", 3))
 
+    regions = _env_list("PRE_ENRICH_REGIONS", DEFAULT_REGION_KEY)
+    if not regions:
+        regions = [DEFAULT_REGION_KEY]
+
     ranges = _env_list("PRE_ENRICH_RANGES", "24h")
     if not ranges:
         ranges = ["24h"]
@@ -2872,6 +2898,7 @@ def _worker_loop() -> None:
             "enabled": enabled,
             "interval_s": interval_s,
             "startup_delay_s": startup_delay_s,
+            "regions": regions,
             "ranges": ranges,
             "countries": countries,
             "scan_limit": scan_limit,
@@ -2880,106 +2907,116 @@ def _worker_loop() -> None:
             "batch_size": batch_size,
             "enriched_count": 0,
             "buckets": {},
-            "mode": "cluster_v2",
+            "mode": "cluster_v2_region_aware",
         }
 
         try:
             total_enriched = 0
             total_queued = 0
 
-            for c in countries:
-                for r in ranges:
-                    bucket_key = f"{c}:{r}"
-                    bucket_scanned = 0
-                    bucket_cached = 0
-                    bucket_queued = 0
-                    bucket_enriched = 0
+            for region_key in regions:
+                if region_key not in LIVE_REGION_KEYS:
+                    continue
 
-                    effective_scan_limit = int(scan_limit)
-                    if (c or "").lower() == "all":
-                        effective_scan_limit = min(effective_scan_limit, 60)
+                region_countries = countries
+                if region_key != "mercosur":
+                    region_countries = [k for k in countries if k in _valid_country_keys_for_region(region_key)]
 
-                    scan_cap = max(150, int(effective_scan_limit) * 10)
-                    items = _collect_items(country=c, range=r, q="", scan_cap=scan_cap)
-                    items = _dedupe(items)
+                for c in region_countries:
+                    for r in ranges:
+                        bucket_key = f"{region_key}:{c}:{r}"
+                        bucket_scanned = 0
+                        bucket_cached = 0
+                        bucket_queued = 0
+                        bucket_enriched = 0
 
-                    for a in items:
-                        a["topic"] = _topic_label(a)
-                        score, _factors = _rank_score_and_factors(a)
-                        a["rank_score"] = score
+                        effective_scan_limit = int(scan_limit)
+                        if region_key == "mercosur" and (c or "").lower() == "all":
+                            effective_scan_limit = min(effective_scan_limit, 60)
 
-                    items.sort(
-                        key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
-                        reverse=True,
-                    )
+                        scan_cap = max(150, int(effective_scan_limit) * 10)
+                        items = _collect_items(region=region_key, country=c, range=r, q="", scan_cap=scan_cap)
+                        items = _dedupe(items)
 
-                    clusters = _cluster_items_v2(items[: max(80, effective_scan_limit * 4)])
-                    for cobj in clusters:
-                        cscore, cfactors = _cluster_rank_score_and_factors(cobj, country_context=c)
-                        cobj["cluster_rank_score"] = cscore
-                        cobj["cluster_rank_factors"] = cfactors
+                        for a in items:
+                            a["topic"] = _topic_label(a)
+                            score, _factors = _rank_score_and_factors(a)
+                            a["rank_score"] = score
 
-                    clusters.sort(
-                        key=lambda cobj: (
-                            float(cobj.get("cluster_rank_score") or 0.0),
-                            ((cobj.get("best_item") or {}).get("published_utc") or ""),
-                        ),
-                        reverse=True,
-                    )
-                    top_clusters = clusters[: int(effective_scan_limit)]
-                    bucket_scanned = len(top_clusters)
-
-                    candidates: List[Dict[str, str]] = []
-                    for cobj in top_clusters:
-                        cid = (cobj.get("cluster_id") or "").strip()
-                        best = cobj.get("best_item") or {}
-                        link = (best.get("link") or "").strip()
-
-                        if cid and _get_fresh_cluster_enrich(cid):
-                            bucket_cached += 1
-                            continue
-
-                        if best.get("title_en") and best.get("summary_en"):
-                            bucket_cached += 1
-                            continue
-
-                        candidates.append(
-                            {
-                                "cluster_id": cid,
-                                "title": best.get("title") or "",
-                                "link": link,
-                                "source": best.get("source") or "",
-                                "snippet": best.get("snippet_text") or "",
-                            }
+                        items.sort(
+                            key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
+                            reverse=True,
                         )
 
-                    if candidates:
-                        remaining = max(0, max_new_total - total_queued)
-                        take = min(max_new_per_bucket, remaining)
-                        candidates = candidates[:take]
-                    else:
-                        candidates = []
+                        clusters = _cluster_items_v2(items[: max(80, effective_scan_limit * 4)])
+                        for cobj in clusters:
+                            cscore, cfactors = _cluster_rank_score_and_factors(cobj, country_context=c)
+                            cobj["cluster_rank_score"] = cscore
+                            cobj["cluster_rank_factors"] = cfactors
 
-                    bucket_queued = len(candidates)
-                    total_queued += bucket_queued
+                        clusters.sort(
+                            key=lambda cobj: (
+                                float(cobj.get("cluster_rank_score") or 0.0),
+                                ((cobj.get("best_item") or {}).get("published_utc") or ""),
+                            ),
+                            reverse=True,
+                        )
+                        top_clusters = clusters[: int(effective_scan_limit)]
+                        bucket_scanned = len(top_clusters)
 
-                    if candidates:
-                        for i in range(0, len(candidates), max(1, batch_size)):
-                            chunk = candidates[i : i + max(1, batch_size)]
-                            ecount = _enrich_internal_clusters(chunk)
-                            bucket_enriched += ecount
-                            total_enriched += ecount
-                            if total_queued >= max_new_total:
-                                break
+                        candidates: List[Dict[str, str]] = []
+                        for cobj in top_clusters:
+                            cid = (cobj.get("cluster_id") or "").strip()
+                            best = cobj.get("best_item") or {}
+                            link = (best.get("link") or "").strip()
 
-                    stats["buckets"][bucket_key] = {
-                        "scanned": bucket_scanned,
-                        "already_cached": bucket_cached,
-                        "queued": bucket_queued,
-                        "enriched": bucket_enriched,
-                    }
-                    stats["enriched_count"] = total_enriched
+                            if cid and _get_fresh_cluster_enrich(cid):
+                                bucket_cached += 1
+                                continue
 
+                            if best.get("title_en") and best.get("summary_en"):
+                                bucket_cached += 1
+                                continue
+
+                            candidates.append(
+                                {
+                                    "cluster_id": cid,
+                                    "title": best.get("title") or "",
+                                    "link": link,
+                                    "source": best.get("source") or "",
+                                    "snippet": best.get("snippet_text") or "",
+                                }
+                            )
+
+                        if candidates:
+                            remaining = max(0, max_new_total - total_queued)
+                            take = min(max_new_per_bucket, remaining)
+                            candidates = candidates[:take]
+                        else:
+                            candidates = []
+
+                        bucket_queued = len(candidates)
+                        total_queued += bucket_queued
+
+                        if candidates:
+                            for i in range(0, len(candidates), max(1, batch_size)):
+                                chunk = candidates[i : i + max(1, batch_size)]
+                                ecount = _enrich_internal_clusters(chunk)
+                                bucket_enriched += ecount
+                                total_enriched += ecount
+                                if total_queued >= max_new_total:
+                                    break
+
+                        stats["buckets"][bucket_key] = {
+                            "scanned": bucket_scanned,
+                            "already_cached": bucket_cached,
+                            "queued": bucket_queued,
+                            "enriched": bucket_enriched,
+                        }
+                        stats["enriched_count"] = total_enriched
+
+                        if total_queued >= max_new_total:
+                            break
                     if total_queued >= max_new_total:
                         break
                 if total_queued >= max_new_total:
