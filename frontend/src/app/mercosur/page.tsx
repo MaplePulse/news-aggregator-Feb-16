@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Article = {
@@ -46,6 +45,8 @@ type CountryOption = {
 };
 
 type HeadlineLimit = 30 | 50 | 100 | 200;
+
+const REGION_KEY = "mercosur" as const;
 
 const MERCOSUR_COUNTRIES: CountryOption[] = [
   { key: "all", code: "ALL", name: "All Mercosur", flag_url: "" },
@@ -299,6 +300,7 @@ function isValidHeadlineLimit(value: string): value is `${HeadlineLimit}` {
 }
 
 function buildShareableUrl(params: {
+  region: string;
   country: CountryOption["key"];
   range: string;
   category: CategoryFilter;
@@ -308,6 +310,8 @@ function buildShareableUrl(params: {
   if (typeof window === "undefined") return "";
 
   const sp = new URLSearchParams();
+
+  sp.set("region", params.region);
 
   if (params.country !== DEFAULT_COUNTRY) sp.set("country", params.country);
   if (params.range !== DEFAULT_RANGE) sp.set("range", params.range);
@@ -417,6 +421,7 @@ export default function MercosurPage() {
 
   function getSharePath() {
     return buildShareableUrl({
+      region: REGION_KEY,
       country,
       range,
       category,
@@ -519,12 +524,17 @@ export default function MercosurPage() {
     setLoadError(null);
 
     try {
-      const res = await fetch(
-        `/api/top?country=${encodeURIComponent(selectedCountry)}&range=${encodeURIComponent(
-          selectedRange
-        )}&q=&limit=${encodeURIComponent(String(selectedHeadlineLimit))}`,
-        { cache: "no-store" }
-      );
+      const params = new URLSearchParams({
+        region: REGION_KEY,
+        country: selectedCountry,
+        range: selectedRange,
+        q: "",
+        limit: String(selectedHeadlineLimit),
+      });
+
+      const res = await fetch(`/api/top?${params.toString()}`, {
+        cache: "no-store",
+      });
 
       const data = await safeJson(res);
 
@@ -896,6 +906,7 @@ export default function MercosurPage() {
     if (!prefsReady) return;
     try {
       const nextUrl = buildShareableUrl({
+        region: REGION_KEY,
         country,
         range,
         category,
@@ -962,15 +973,6 @@ export default function MercosurPage() {
     <main className="mx-auto max-w-6xl overflow-x-hidden px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
       <section className="relative overflow-hidden rounded-3xl border border-gray-200/80 bg-white/80 px-5 py-6 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/40 sm:px-7 sm:py-8">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.10),transparent_32%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_32%)]" />
-
-        <div className="relative mb-3">
-          <Link
-            href="/"
-            className="inline-flex items-center text-sm font-medium text-blue-600 transition hover:underline dark:text-blue-400"
-          >
-            ← All editions
-          </Link>
-        </div>
 
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
