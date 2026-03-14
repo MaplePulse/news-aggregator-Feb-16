@@ -30,32 +30,35 @@ type Cluster = {
   best_item: Article;
 };
 
-type RegionKey = "mercosur" | "mexico" | "central-america";
-type MercosurCountryKey = "all" | "mp" | "uy" | "ar" | "br" | "py" | "bo";
-type CountryKey = MercosurCountryKey;
+type RegionKey = string;
+type CountryKey = string;
 
 type CountryOption = {
   key: CountryKey;
   code: string;
   name: string;
   flag_url: string;
+  source_count?: number;
 };
 
 type RegionOption = {
   key: RegionKey;
   name: string;
   status: "live" | "coming-soon";
+  default_country?: string;
+  countries_count?: number;
+  source_count?: number;
 };
 
 type HeadlineLimit = 30 | 50 | 100 | 200;
 
-const REGION_OPTIONS: RegionOption[] = [
-  { key: "mercosur", name: "Mercosur", status: "live" },
-  { key: "mexico", name: "Mexico", status: "coming-soon" },
-  { key: "central-america", name: "Central America", status: "coming-soon" },
+const FALLBACK_REGION_OPTIONS: RegionOption[] = [
+  { key: "mercosur", name: "Mercosur", status: "live", default_country: "uy" },
+  { key: "mexico", name: "Mexico", status: "coming-soon", default_country: "mx" },
+  { key: "central-america", name: "Central America", status: "coming-soon", default_country: "all" },
 ];
 
-const MERCOSUR_COUNTRIES: CountryOption[] = [
+const FALLBACK_MERCOSUR_COUNTRIES: CountryOption[] = [
   { key: "all", code: "ALL", name: "All Mercosur", flag_url: "" },
   { key: "mp", code: "MP", name: "MercoPress", flag_url: "" },
   { key: "uy", code: "UY", name: "Uruguay", flag_url: "https://flagcdn.com/w40/uy.png" },
@@ -107,8 +110,8 @@ const STORAGE_KEYS = {
   headlineLimit: "mercosur-news-headline-limit",
 } as const;
 
-const DEFAULT_REGION: RegionKey = "mercosur";
-const DEFAULT_COUNTRY: CountryKey = "uy";
+const DEFAULT_REGION = "mercosur";
+const DEFAULT_COUNTRY = "uy";
 const DEFAULT_RANGE = "24h";
 const DEFAULT_CATEGORY: CategoryFilter = "all";
 const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
@@ -233,10 +236,7 @@ function SunIcon() {
 function MoonIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="M20 14.2A8.5 8.5 0 0 1 9.8 4a8.8 8.8 0 1 0 10.2 10.2Z"
-        fill="currentColor"
-      />
+      <path d="M20 14.2A8.5 8.5 0 0 1 9.8 4a8.8 8.8 0 1 0 10.2 10.2Z" fill="currentColor" />
     </svg>
   );
 }
@@ -253,12 +253,7 @@ function SearchIcon() {
 function FilterIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-      <path
-        d="M4 6h16M7 12h10M10 18h4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -347,18 +342,6 @@ function isLaDiaria(link: string) {
   }
 }
 
-function isValidRegionKey(value: string): value is RegionKey {
-  return ["mercosur", "mexico", "central-america"].includes(value);
-}
-
-function isLiveRegion(value: RegionKey) {
-  return REGION_OPTIONS.some((r) => r.key === value && r.status === "live");
-}
-
-function isValidCountryKey(value: string): value is CountryKey {
-  return ["all", "mp", "uy", "ar", "br", "py", "bo"].includes(value);
-}
-
 function isValidRange(value: string) {
   return ["24h", "3d", "7d", "30d"].includes(value);
 }
@@ -396,8 +379,32 @@ function buildShareableUrl(params: {
   return `${window.location.pathname}${qs ? `?${qs}` : ""}`;
 }
 
+function getFallbackRegionOption(key: string) {
+  return FALLBACK_REGION_OPTIONS.find((r) => r.key === key);
+}
+
+function getFallbackCountriesForRegion(regionKey: string): CountryOption[] {
+  if (regionKey === "mercosur") return FALLBACK_MERCOSUR_COUNTRIES;
+  return [];
+}
+
+function isLiveRegionFromList(regionKey: string, options: RegionOption[]) {
+  return options.some((r) => r.key === regionKey && r.status === "live");
+}
+
+function defaultCountryForRegion(regionKey: string, regions: RegionOption[], countries: CountryOption[]) {
+  const fromRegion = regions.find((r) => r.key === regionKey)?.default_country?.trim();
+  if (fromRegion && countries.some((c) => c.key === fromRegion)) return fromRegion;
+  if (countries.length > 0) return countries[0].key;
+  const fallback = getFallbackRegionOption(regionKey)?.default_country?.trim();
+  return fallback || DEFAULT_COUNTRY;
+}
+
 export default function Home() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
+
+  const [regionsData, setRegionsData] = useState<RegionOption[]>(FALLBACK_REGION_OPTIONS);
+  const [countriesData, setCountriesData] = useState<CountryOption[]>(FALLBACK_MERCOSUR_COUNTRIES);
 
   const [region, setRegion] = useState<RegionKey>(DEFAULT_REGION);
   const [query, setQuery] = useState("");
@@ -439,13 +446,6 @@ export default function Home() {
   const shareMessageTimerRef = useRef<number | null>(null);
   const comingSoonTimerRef = useRef<number | null>(null);
 
-  const regionOptionsForUi = useMemo(() => REGION_OPTIONS, []);
-
-  const countryOptions = useMemo(() => {
-    if (region === "mercosur") return MERCOSUR_COUNTRIES;
-    return MERCOSUR_COUNTRIES;
-  }, [region]);
-
   const topicsInData = useMemo(() => {
     const s = new Set<string>();
     for (const c of clusters) s.add(normalizeTopic(c.best_item.topic || c.topic));
@@ -454,6 +454,16 @@ export default function Home() {
   }, [clusters]);
 
   const categoryOptions = useMemo(() => CATEGORY_ORDER, []);
+
+  const regionOptionsForUi = useMemo(() => {
+    if (regionsData.length > 0) return regionsData;
+    return FALLBACK_REGION_OPTIONS;
+  }, [regionsData]);
+
+  const countryOptions = useMemo(() => {
+    if (countriesData.length > 0) return countriesData;
+    return getFallbackCountriesForRegion(region);
+  }, [countriesData, region]);
 
   useEffect(() => {
     if (category !== "all" && !topicsInData.has(category)) {
@@ -483,9 +493,58 @@ export default function Home() {
     } catch {}
   }
 
+  async function fetchRegionsFromBackend(): Promise<RegionOption[]> {
+    try {
+      const res = await fetch("/api/regions", { cache: "no-store" });
+      const data = await safeJson(res);
+      if (!res.ok) return FALLBACK_REGION_OPTIONS;
+
+      const regions = Array.isArray(data?.regions) ? data.regions : [];
+      const cleaned = regions
+        .map((r: any) => ({
+          key: String(r?.key || "").trim(),
+          name: String(r?.name || "").trim(),
+          status: r?.status === "live" ? "live" : "coming-soon",
+          default_country: String(r?.default_country || "").trim() || undefined,
+          countries_count: typeof r?.countries_count === "number" ? r.countries_count : undefined,
+          source_count: typeof r?.source_count === "number" ? r.source_count : undefined,
+        }))
+        .filter((r: RegionOption) => r.key && r.name);
+
+      return cleaned.length > 0 ? cleaned : FALLBACK_REGION_OPTIONS;
+    } catch {
+      return FALLBACK_REGION_OPTIONS;
+    }
+  }
+
+  async function fetchCountriesForRegion(regionKey: string): Promise<CountryOption[]> {
+    try {
+      const params = new URLSearchParams({ region: regionKey });
+      const res = await fetch(`/api/countries?${params.toString()}`, { cache: "no-store" });
+      const data = await safeJson(res);
+      if (!res.ok) return getFallbackCountriesForRegion(regionKey);
+
+      const countries = Array.isArray(data?.countries) ? data.countries : [];
+      const cleaned = countries
+        .map((c: any) => ({
+          key: String(c?.key || "").trim(),
+          code: String(c?.code || "").trim(),
+          name: String(c?.name || "").trim(),
+          flag_url: String(c?.flag_url || ""),
+          source_count: typeof c?.source_count === "number" ? c.source_count : undefined,
+        }))
+        .filter((c: CountryOption) => c.key && c.name);
+
+      return cleaned.length > 0 ? cleaned : getFallbackCountriesForRegion(regionKey);
+    } catch {
+      return getFallbackCountriesForRegion(regionKey);
+    }
+  }
+
   function resetFiltersToDefault() {
     const nextRegion = DEFAULT_REGION;
-    const nextCountry = DEFAULT_COUNTRY;
+    const fallbackCountries = getFallbackCountriesForRegion(nextRegion);
+    const nextCountry = defaultCountryForRegion(nextRegion, regionOptionsForUi, fallbackCountries);
     const nextRange = DEFAULT_RANGE;
     const nextCategory = DEFAULT_CATEGORY;
     const nextHeadlineLimit = DEFAULT_HEADLINE_LIMIT;
@@ -803,8 +862,8 @@ export default function Home() {
 
   useEffect(() => {
     let savedTheme: "dark" | "light" = "dark";
-    let savedRegion: RegionKey = DEFAULT_REGION;
-    let savedCountry: CountryKey = DEFAULT_COUNTRY;
+    let savedRegion = DEFAULT_REGION;
+    let savedCountry = DEFAULT_COUNTRY;
     let savedRange = DEFAULT_RANGE;
     let savedCategory: CategoryFilter = DEFAULT_CATEGORY;
     let savedHeadlineLimit: HeadlineLimit = DEFAULT_HEADLINE_LIMIT;
@@ -814,11 +873,11 @@ export default function Home() {
       const themeRaw = window.localStorage.getItem(STORAGE_KEYS.theme);
       if (themeRaw === "light" || themeRaw === "dark") savedTheme = themeRaw;
 
-      const regionRaw = window.localStorage.getItem(STORAGE_KEYS.region);
-      if (regionRaw && isValidRegionKey(regionRaw) && isLiveRegion(regionRaw)) savedRegion = regionRaw;
+      const regionRaw = (window.localStorage.getItem(STORAGE_KEYS.region) || "").trim();
+      if (regionRaw) savedRegion = regionRaw;
 
-      const countryRaw = window.localStorage.getItem(STORAGE_KEYS.country);
-      if (countryRaw && isValidCountryKey(countryRaw)) savedCountry = countryRaw;
+      const countryRaw = (window.localStorage.getItem(STORAGE_KEYS.country) || "").trim();
+      if (countryRaw) savedCountry = countryRaw;
 
       const rangeRaw = window.localStorage.getItem(STORAGE_KEYS.range);
       if (rangeRaw && isValidRange(rangeRaw)) savedRange = rangeRaw;
@@ -835,11 +894,11 @@ export default function Home() {
     try {
       const sp = new URLSearchParams(window.location.search);
 
-      const regionParam = sp.get("region");
-      if (regionParam && isValidRegionKey(regionParam) && isLiveRegion(regionParam)) savedRegion = regionParam;
+      const regionParam = (sp.get("region") || "").trim();
+      if (regionParam) savedRegion = regionParam;
 
-      const countryParam = sp.get("country");
-      if (countryParam && isValidCountryKey(countryParam)) savedCountry = countryParam;
+      const countryParam = (sp.get("country") || "").trim();
+      if (countryParam) savedCountry = countryParam;
 
       const rangeParam = sp.get("range");
       if (rangeParam && isValidRange(rangeParam)) savedRange = rangeParam;
@@ -856,23 +915,41 @@ export default function Home() {
       if (typeof queryParam === "string") savedQuery = queryParam;
     } catch {}
 
-    setMounted(true);
-    setTheme(savedTheme);
+    async function initialize() {
+      const nextRegions = await fetchRegionsFromBackend();
+      const normalizedRegion =
+        nextRegions.some((r) => r.key === savedRegion) && isLiveRegionFromList(savedRegion, nextRegions)
+          ? savedRegion
+          : DEFAULT_REGION;
 
-    try {
-      setIos(isIOS());
-      setStandalone(isStandalone());
-    } catch {}
+      const nextCountries = await fetchCountriesForRegion(normalizedRegion);
+      const normalizedCountry = nextCountries.some((c) => c.key === savedCountry)
+        ? savedCountry
+        : defaultCountryForRegion(normalizedRegion, nextRegions, nextCountries);
 
-    setRegion(savedRegion);
-    setCountry(savedCountry);
-    setRange(savedRange);
-    setCategory(savedCategory);
-    setHeadlineLimit(savedHeadlineLimit);
-    setQuery(savedQuery);
-    setPrefsReady(true);
+      setMounted(true);
+      setTheme(savedTheme);
 
-    loadTopStories(savedRegion, savedRange, savedCountry, savedHeadlineLimit);
+      try {
+        setIos(isIOS());
+        setStandalone(isStandalone());
+      } catch {}
+
+      setRegionsData(nextRegions);
+      setCountriesData(nextCountries);
+
+      setRegion(normalizedRegion);
+      setCountry(normalizedCountry);
+      setRange(savedRange);
+      setCategory(savedCategory);
+      setHeadlineLimit(savedHeadlineLimit);
+      setQuery(savedQuery);
+      setPrefsReady(true);
+
+      await loadTopStories(normalizedRegion, savedRange, normalizedCountry, savedHeadlineLimit);
+    }
+
+    void initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1078,8 +1155,8 @@ export default function Home() {
     setInfoOpen(true);
   }
 
-  function handleRegionChange(nextRegion: RegionKey) {
-    const option = REGION_OPTIONS.find((r) => r.key === nextRegion);
+  async function handleRegionChange(nextRegion: string) {
+    const option = regionOptionsForUi.find((r) => r.key === nextRegion);
     if (!option) return;
 
     if (option.status !== "live") {
@@ -1089,15 +1166,32 @@ export default function Home() {
 
     setRegion(nextRegion);
 
-    if (nextRegion === "mercosur") {
-      const nextCountry = MERCOSUR_COUNTRIES.some((c) => c.key === country) ? country : DEFAULT_COUNTRY;
-      setCountry(nextCountry);
-      loadTopStories(nextRegion, range, nextCountry, headlineLimit);
-    }
+    const nextCountries = await fetchCountriesForRegion(nextRegion);
+    setCountriesData(nextCountries);
+
+    const nextCountry = defaultCountryForRegion(nextRegion, regionOptionsForUi, nextCountries);
+    setCountry(nextCountry);
+
+    await loadTopStories(nextRegion, range, nextCountry, headlineLimit);
+  }
+
+  async function handleCountryChange(nextCountry: string) {
+    setCountry(nextCountry);
+    await loadTopStories(region, range, nextCountry, headlineLimit);
+  }
+
+  async function handleRangeChange(nextRange: string) {
+    setRange(nextRange);
+    await loadTopStories(region, nextRange, country, headlineLimit);
+  }
+
+  async function handleHeadlineLimitChange(nextLimit: HeadlineLimit) {
+    setHeadlineLimit(nextLimit);
+    await loadTopStories(region, range, country, nextLimit);
   }
 
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
-  const selectedCountryName = countryOptions.find((c) => c.key === country)?.name || "Uruguay";
+  const selectedCountryName = countryOptions.find((c) => c.key === country)?.name || "News";
 
   const subscribeInsertIndex = filteredClusters.length >= 4 ? 3 : -1;
 
@@ -1454,7 +1548,7 @@ export default function Home() {
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Region</label>
                 <select
                   value={region}
-                  onChange={(e) => handleRegionChange(e.target.value as RegionKey)}
+                  onChange={(e) => void handleRegionChange(e.target.value)}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
                   {regionOptionsForUi.map((r) => (
@@ -1469,11 +1563,7 @@ export default function Home() {
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
                 <select
                   value={country}
-                  onChange={(e) => {
-                    const val = e.target.value as CountryKey;
-                    setCountry(val);
-                    loadTopStories(region, range, val, headlineLimit);
-                  }}
+                  onChange={(e) => void handleCountryChange(e.target.value)}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
                   {countryOptions.map((c) => (
@@ -1488,11 +1578,7 @@ export default function Home() {
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label>
                 <select
                   value={range}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setRange(val);
-                    loadTopStories(region, val, country, headlineLimit);
-                  }}
+                  onChange={(e) => void handleRangeChange(e.target.value)}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
                   <option value="24h">Last 24 Hours</option>
@@ -1522,11 +1608,7 @@ export default function Home() {
                 <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Headline Limit</label>
                 <select
                   value={headlineLimit}
-                  onChange={(e) => {
-                    const val = Number(e.target.value) as HeadlineLimit;
-                    setHeadlineLimit(val);
-                    loadTopStories(region, range, country, val);
-                  }}
+                  onChange={(e) => void handleHeadlineLimitChange(Number(e.target.value) as HeadlineLimit)}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
                   {HEADLINE_LIMIT_OPTIONS.map((limit) => (
