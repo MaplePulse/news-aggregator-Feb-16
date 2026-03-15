@@ -1212,9 +1212,11 @@ export default function Home() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-black sm:h-16 sm:w-16">
-                  <img src={BRAND_LOGO_PATH} alt={APP_NAME} className="h-full w-full object-cover" />
-                </div>
+                <img
+                  src={BRAND_LOGO_PATH}
+                  alt={APP_NAME}
+                  className="h-14 w-14 shrink-0 object-contain sm:h-16 sm:w-16"
+                />
 
                 <div className="min-w-0">
                   <h1 className="break-words text-[2.4rem] font-extrabold leading-[0.92] tracking-tight text-gray-950 dark:text-white sm:text-6xl">
