@@ -9,6 +9,7 @@ type Article = {
   source: string;
   source_logo?: string | null;
   country_flag_url?: string | null;
+  subdivision_flag_url?: string | null;
   snippet_text: string;
   title_en?: string | null;
   summary_en?: string | null;
@@ -31,10 +32,10 @@ type Cluster = {
 };
 
 type RegionKey = string;
-type CountryKey = string;
+type SubdivisionKey = string;
 
-type CountryOption = {
-  key: CountryKey;
+type SubdivisionOption = {
+  key: SubdivisionKey;
   code: string;
   name: string;
   flag_url: string;
@@ -45,7 +46,10 @@ type RegionOption = {
   key: RegionKey;
   name: string;
   status: "live" | "coming-soon";
+  subdivision_label?: string;
+  default_subdivision?: string;
   default_country?: string;
+  subdivisions_count?: number;
   countries_count?: number;
   source_count?: number;
 };
@@ -53,12 +57,33 @@ type RegionOption = {
 type HeadlineLimit = 30 | 50 | 100 | 200;
 
 const FALLBACK_REGION_OPTIONS: RegionOption[] = [
-  { key: "mercosur", name: "Mercosur", status: "live", default_country: "uy" },
-  { key: "mexico", name: "Mexico", status: "coming-soon", default_country: "mx" },
-  { key: "central-america", name: "Central America", status: "coming-soon", default_country: "all" },
+  {
+    key: "mercosur",
+    name: "Mercosur",
+    status: "live",
+    subdivision_label: "Country",
+    default_subdivision: "uy",
+    default_country: "uy",
+  },
+  {
+    key: "mexico",
+    name: "Mexico",
+    status: "coming-soon",
+    subdivision_label: "State",
+    default_subdivision: "mx",
+    default_country: "mx",
+  },
+  {
+    key: "central-america",
+    name: "Central America",
+    status: "coming-soon",
+    subdivision_label: "Country",
+    default_subdivision: "all",
+    default_country: "all",
+  },
 ];
 
-const FALLBACK_MERCOSUR_COUNTRIES: CountryOption[] = [
+const FALLBACK_MERCOSUR_SUBDIVISIONS: SubdivisionOption[] = [
   { key: "all", code: "ALL", name: "All Mercosur", flag_url: "" },
   { key: "mp", code: "MP", name: "MercoPress", flag_url: "" },
   { key: "uy", code: "UY", name: "Uruguay", flag_url: "https://flagcdn.com/w40/uy.png" },
@@ -104,6 +129,7 @@ type LoadError = { message: string; status?: number } | null;
 const STORAGE_KEYS = {
   theme: "mercosur-news-theme",
   region: "mercosur-news-region",
+  subdivision: "mercosur-news-subdivision",
   country: "mercosur-news-country",
   range: "mercosur-news-range",
   category: "mercosur-news-category",
@@ -111,7 +137,7 @@ const STORAGE_KEYS = {
 } as const;
 
 const DEFAULT_REGION = "mercosur";
-const DEFAULT_COUNTRY = "uy";
+const DEFAULT_SUBDIVISION = "uy";
 const DEFAULT_RANGE = "24h";
 const DEFAULT_CATEGORY: CategoryFilter = "all";
 const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
@@ -360,7 +386,7 @@ function isValidHeadlineLimit(value: string): value is `${HeadlineLimit}` {
 
 function buildShareableUrl(params: {
   region: RegionKey;
-  country: CountryKey;
+  subdivision: SubdivisionKey;
   range: string;
   category: CategoryFilter;
   headlineLimit: HeadlineLimit;
@@ -371,7 +397,7 @@ function buildShareableUrl(params: {
   const sp = new URLSearchParams();
 
   if (params.region !== DEFAULT_REGION) sp.set("region", params.region);
-  if (params.country !== DEFAULT_COUNTRY) sp.set("country", params.country);
+  if (params.subdivision !== DEFAULT_SUBDIVISION) sp.set("subdivision", params.subdivision);
   if (params.range !== DEFAULT_RANGE) sp.set("range", params.range);
   if (params.category !== DEFAULT_CATEGORY) sp.set("category", params.category);
   if (params.headlineLimit !== DEFAULT_HEADLINE_LIMIT) sp.set("limit", String(params.headlineLimit));
@@ -387,8 +413,8 @@ function getFallbackRegionOption(key: string) {
   return FALLBACK_REGION_OPTIONS.find((r) => r.key === key);
 }
 
-function getFallbackCountriesForRegion(regionKey: string): CountryOption[] {
-  if (regionKey === "mercosur") return FALLBACK_MERCOSUR_COUNTRIES;
+function getFallbackSubdivisionsForRegion(regionKey: string): SubdivisionOption[] {
+  if (regionKey === "mercosur") return FALLBACK_MERCOSUR_SUBDIVISIONS;
   return [];
 }
 
@@ -396,24 +422,44 @@ function isLiveRegionFromList(regionKey: string, options: RegionOption[]) {
   return options.some((r) => r.key === regionKey && r.status === "live");
 }
 
-function defaultCountryForRegion(regionKey: string, regions: RegionOption[], countries: CountryOption[]) {
-  const fromRegion = regions.find((r) => r.key === regionKey)?.default_country?.trim();
-  if (fromRegion && countries.some((c) => c.key === fromRegion)) return fromRegion;
-  if (countries.length > 0) return countries[0].key;
-  const fallback = getFallbackRegionOption(regionKey)?.default_country?.trim();
-  return fallback || DEFAULT_COUNTRY;
+function subdivisionLabelForRegion(regionKey: string, regions: RegionOption[]) {
+  const fromRegion = (regions.find((r) => r.key === regionKey)?.subdivision_label || "").trim();
+  if (fromRegion) return fromRegion;
+  const fromFallback = (getFallbackRegionOption(regionKey)?.subdivision_label || "").trim();
+  if (fromFallback) return fromFallback;
+  return "Subdivision";
+}
+
+function defaultSubdivisionForRegion(regionKey: string, regions: RegionOption[], subdivisions: SubdivisionOption[]) {
+  const fromRegion = (
+    regions.find((r) => r.key === regionKey)?.default_subdivision ||
+    regions.find((r) => r.key === regionKey)?.default_country ||
+    ""
+  )
+    .trim();
+
+  if (fromRegion && subdivisions.some((c) => c.key === fromRegion)) return fromRegion;
+  if (subdivisions.length > 0) return subdivisions[0].key;
+
+  const fallback = (
+    getFallbackRegionOption(regionKey)?.default_subdivision ||
+    getFallbackRegionOption(regionKey)?.default_country ||
+    ""
+  ).trim();
+
+  return fallback || DEFAULT_SUBDIVISION;
 }
 
 export default function Home() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
 
   const [regionsData, setRegionsData] = useState<RegionOption[]>(FALLBACK_REGION_OPTIONS);
-  const [countriesData, setCountriesData] = useState<CountryOption[]>(FALLBACK_MERCOSUR_COUNTRIES);
+  const [subdivisionsData, setSubdivisionsData] = useState<SubdivisionOption[]>(FALLBACK_MERCOSUR_SUBDIVISIONS);
 
   const [region, setRegion] = useState<RegionKey>(DEFAULT_REGION);
   const [query, setQuery] = useState("");
   const [range, setRange] = useState(DEFAULT_RANGE);
-  const [country, setCountry] = useState<CountryKey>(DEFAULT_COUNTRY);
+  const [subdivision, setSubdivision] = useState<SubdivisionKey>(DEFAULT_SUBDIVISION);
   const [category, setCategory] = useState<CategoryFilter>(DEFAULT_CATEGORY);
   const [headlineLimit, setHeadlineLimit] = useState<HeadlineLimit>(DEFAULT_HEADLINE_LIMIT);
 
@@ -464,10 +510,14 @@ export default function Home() {
     return FALLBACK_REGION_OPTIONS;
   }, [regionsData]);
 
-  const countryOptions = useMemo(() => {
-    if (countriesData.length > 0) return countriesData;
-    return getFallbackCountriesForRegion(region);
-  }, [countriesData, region]);
+  const subdivisionOptions = useMemo(() => {
+    if (subdivisionsData.length > 0) return subdivisionsData;
+    return getFallbackSubdivisionsForRegion(region);
+  }, [subdivisionsData, region]);
+
+  const subdivisionLabel = useMemo(() => {
+    return subdivisionLabelForRegion(region, regionOptionsForUi);
+  }, [region, regionOptionsForUi]);
 
   useEffect(() => {
     if (category !== "all" && !topicsInData.has(category)) {
@@ -509,8 +559,27 @@ export default function Home() {
           key: String(r?.key || "").trim(),
           name: String(r?.name || "").trim(),
           status: r?.status === "live" ? "live" : "coming-soon",
-          default_country: String(r?.default_country || "").trim() || undefined,
-          countries_count: typeof r?.countries_count === "number" ? r.countries_count : undefined,
+          subdivision_label: String(r?.subdivision_label || "").trim() || undefined,
+          default_subdivision:
+            String(r?.default_subdivision || "").trim() ||
+            String(r?.default_country || "").trim() ||
+            undefined,
+          default_country:
+            String(r?.default_country || "").trim() ||
+            String(r?.default_subdivision || "").trim() ||
+            undefined,
+          subdivisions_count:
+            typeof r?.subdivisions_count === "number"
+              ? r.subdivisions_count
+              : typeof r?.countries_count === "number"
+              ? r.countries_count
+              : undefined,
+          countries_count:
+            typeof r?.countries_count === "number"
+              ? r.countries_count
+              : typeof r?.subdivisions_count === "number"
+              ? r.subdivisions_count
+              : undefined,
           source_count: typeof r?.source_count === "number" ? r.source_count : undefined,
         }))
         .filter((r: RegionOption) => r.key && r.name);
@@ -521,15 +590,18 @@ export default function Home() {
     }
   }
 
-  async function fetchCountriesForRegion(regionKey: string): Promise<CountryOption[]> {
+  async function fetchSubdivisionsForRegion(regionKey: string): Promise<SubdivisionOption[]> {
     try {
       const params = new URLSearchParams({ region: regionKey });
-      const res = await fetch(`/api/countries?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/subdivisions?${params.toString()}`, { cache: "no-store" });
       const data = await safeJson(res);
-      if (!res.ok) return getFallbackCountriesForRegion(regionKey);
 
-      const countries = Array.isArray(data?.countries) ? data.countries : [];
-      const cleaned = countries
+      if (!res.ok) {
+        return getFallbackSubdivisionsForRegion(regionKey);
+      }
+
+      const subdivisions = Array.isArray(data?.subdivisions) ? data.subdivisions : [];
+      const cleaned = subdivisions
         .map((c: any) => ({
           key: String(c?.key || "").trim(),
           code: String(c?.code || "").trim(),
@@ -537,29 +609,50 @@ export default function Home() {
           flag_url: String(c?.flag_url || ""),
           source_count: typeof c?.source_count === "number" ? c.source_count : undefined,
         }))
-        .filter((c: CountryOption) => c.key && c.name);
+        .filter((c: SubdivisionOption) => c.key && c.name);
 
-      return cleaned.length > 0 ? cleaned : getFallbackCountriesForRegion(regionKey);
+      return cleaned.length > 0 ? cleaned : getFallbackSubdivisionsForRegion(regionKey);
     } catch {
-      return getFallbackCountriesForRegion(regionKey);
+      try {
+        const params = new URLSearchParams({ region: regionKey });
+        const res = await fetch(`/api/countries?${params.toString()}`, { cache: "no-store" });
+        const data = await safeJson(res);
+        if (!res.ok) return getFallbackSubdivisionsForRegion(regionKey);
+
+        const countries = Array.isArray(data?.countries) ? data.countries : [];
+        const cleaned = countries
+          .map((c: any) => ({
+            key: String(c?.key || "").trim(),
+            code: String(c?.code || "").trim(),
+            name: String(c?.name || "").trim(),
+            flag_url: String(c?.flag_url || ""),
+            source_count: typeof c?.source_count === "number" ? c.source_count : undefined,
+          }))
+          .filter((c: SubdivisionOption) => c.key && c.name);
+
+        return cleaned.length > 0 ? cleaned : getFallbackSubdivisionsForRegion(regionKey);
+      } catch {
+        return getFallbackSubdivisionsForRegion(regionKey);
+      }
     }
   }
 
   function resetFiltersToDefault() {
     const nextRegion = DEFAULT_REGION;
-    const fallbackCountries = getFallbackCountriesForRegion(nextRegion);
-    const nextCountry = defaultCountryForRegion(nextRegion, regionOptionsForUi, fallbackCountries);
+    const fallbackSubdivisions = getFallbackSubdivisionsForRegion(nextRegion);
+    const nextSubdivision = defaultSubdivisionForRegion(nextRegion, regionOptionsForUi, fallbackSubdivisions);
     const nextRange = DEFAULT_RANGE;
     const nextCategory = DEFAULT_CATEGORY;
     const nextHeadlineLimit = DEFAULT_HEADLINE_LIMIT;
 
     setRegion(nextRegion);
-    setCountry(nextCountry);
+    setSubdivision(nextSubdivision);
     setRange(nextRange);
     setCategory(nextCategory);
     setHeadlineLimit(nextHeadlineLimit);
+    setQuery("");
 
-    loadTopStories(nextRegion, nextRange, nextCountry, nextHeadlineLimit);
+    loadTopStories(nextRegion, nextRange, nextSubdivision, nextHeadlineLimit);
   }
 
   function showShareFeedback(message: string) {
@@ -591,7 +684,7 @@ export default function Home() {
   function getSharePath() {
     return buildShareableUrl({
       region,
-      country,
+      subdivision,
       range,
       category,
       headlineLimit,
@@ -664,7 +757,7 @@ export default function Home() {
   function openExternalShare(type: "whatsapp" | "x" | "facebook" | "email") {
     const url = getShareUrl();
     const encodedUrl = encodeURIComponent(url);
-    const text = encodeURIComponent(`${selectedRegionName}: ${selectedCountryName}`);
+    const text = encodeURIComponent(`${selectedRegionName}: ${selectedSubdivisionName}`);
     let shareHref = "";
 
     if (type === "whatsapp") {
@@ -674,7 +767,7 @@ export default function Home() {
     } else if (type === "facebook") {
       shareHref = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
     } else if (type === "email") {
-      shareHref = `mailto:?subject=${encodeURIComponent(`${selectedRegionName}: ${selectedCountryName}`)}&body=${encodeURIComponent(
+      shareHref = `mailto:?subject=${encodeURIComponent(`${selectedRegionName}: ${selectedSubdivisionName}`)}&body=${encodeURIComponent(
         `Take a look at this view:\n\n${url}`
       )}`;
     }
@@ -687,7 +780,7 @@ export default function Home() {
   async function loadTopStories(
     selectedRegion = region,
     selectedRange = range,
-    selectedCountry = country,
+    selectedSubdivision = subdivision,
     selectedHeadlineLimit = headlineLimit
   ) {
     setLoading(true);
@@ -696,7 +789,7 @@ export default function Home() {
     try {
       const params = new URLSearchParams({
         region: selectedRegion,
-        country: selectedCountry,
+        subdivision: selectedSubdivision,
         range: selectedRange,
         q: "",
         limit: String(selectedHeadlineLimit),
@@ -867,7 +960,7 @@ export default function Home() {
   useEffect(() => {
     let savedTheme: "dark" | "light" = "dark";
     let savedRegion = DEFAULT_REGION;
-    let savedCountry = DEFAULT_COUNTRY;
+    let savedSubdivision = DEFAULT_SUBDIVISION;
     let savedRange = DEFAULT_RANGE;
     let savedCategory: CategoryFilter = DEFAULT_CATEGORY;
     let savedHeadlineLimit: HeadlineLimit = DEFAULT_HEADLINE_LIMIT;
@@ -880,8 +973,10 @@ export default function Home() {
       const regionRaw = (window.localStorage.getItem(STORAGE_KEYS.region) || "").trim();
       if (regionRaw) savedRegion = regionRaw;
 
-      const countryRaw = (window.localStorage.getItem(STORAGE_KEYS.country) || "").trim();
-      if (countryRaw) savedCountry = countryRaw;
+      const subdivisionRaw =
+        (window.localStorage.getItem(STORAGE_KEYS.subdivision) || "").trim() ||
+        (window.localStorage.getItem(STORAGE_KEYS.country) || "").trim();
+      if (subdivisionRaw) savedSubdivision = subdivisionRaw;
 
       const rangeRaw = window.localStorage.getItem(STORAGE_KEYS.range);
       if (rangeRaw && isValidRange(rangeRaw)) savedRange = rangeRaw;
@@ -901,8 +996,8 @@ export default function Home() {
       const regionParam = (sp.get("region") || "").trim();
       if (regionParam) savedRegion = regionParam;
 
-      const countryParam = (sp.get("country") || "").trim();
-      if (countryParam) savedCountry = countryParam;
+      const subdivisionParam = (sp.get("subdivision") || sp.get("country") || "").trim();
+      if (subdivisionParam) savedSubdivision = subdivisionParam;
 
       const rangeParam = sp.get("range");
       if (rangeParam && isValidRange(rangeParam)) savedRange = rangeParam;
@@ -926,10 +1021,10 @@ export default function Home() {
           ? savedRegion
           : DEFAULT_REGION;
 
-      const nextCountries = await fetchCountriesForRegion(normalizedRegion);
-      const normalizedCountry = nextCountries.some((c) => c.key === savedCountry)
-        ? savedCountry
-        : defaultCountryForRegion(normalizedRegion, nextRegions, nextCountries);
+      const nextSubdivisions = await fetchSubdivisionsForRegion(normalizedRegion);
+      const normalizedSubdivision = nextSubdivisions.some((c) => c.key === savedSubdivision)
+        ? savedSubdivision
+        : defaultSubdivisionForRegion(normalizedRegion, nextRegions, nextSubdivisions);
 
       setMounted(true);
       setTheme(savedTheme);
@@ -940,17 +1035,17 @@ export default function Home() {
       } catch {}
 
       setRegionsData(nextRegions);
-      setCountriesData(nextCountries);
+      setSubdivisionsData(nextSubdivisions);
 
       setRegion(normalizedRegion);
-      setCountry(normalizedCountry);
+      setSubdivision(normalizedSubdivision);
       setRange(savedRange);
       setCategory(savedCategory);
       setHeadlineLimit(savedHeadlineLimit);
       setQuery(savedQuery);
       setPrefsReady(true);
 
-      await loadTopStories(normalizedRegion, savedRange, normalizedCountry, savedHeadlineLimit);
+      await loadTopStories(normalizedRegion, savedRange, normalizedSubdivision, savedHeadlineLimit);
     }
 
     void initialize();
@@ -1064,9 +1159,10 @@ export default function Home() {
   useEffect(() => {
     if (!prefsReady) return;
     try {
-      window.localStorage.setItem(STORAGE_KEYS.country, country);
+      window.localStorage.setItem(STORAGE_KEYS.subdivision, subdivision);
+      window.localStorage.setItem(STORAGE_KEYS.country, subdivision);
     } catch {}
-  }, [country, prefsReady]);
+  }, [subdivision, prefsReady]);
 
   useEffect(() => {
     if (!prefsReady) return;
@@ -1094,7 +1190,7 @@ export default function Home() {
     try {
       const nextUrl = buildShareableUrl({
         region,
-        country,
+        subdivision,
         range,
         category,
         headlineLimit,
@@ -1104,7 +1200,7 @@ export default function Home() {
         window.history.replaceState(null, "", nextUrl);
       }
     } catch {}
-  }, [region, country, range, category, headlineLimit, query, prefsReady]);
+  }, [region, subdivision, range, category, headlineLimit, query, prefsReady]);
 
   useEffect(() => {
     return () => {
@@ -1132,13 +1228,13 @@ export default function Home() {
 
   const hasActiveSearch = query.trim().length > 0;
   const hasNonDefaultRegion = region !== DEFAULT_REGION;
-  const hasNonDefaultCountry = country !== DEFAULT_COUNTRY;
+  const hasNonDefaultSubdivision = subdivision !== DEFAULT_SUBDIVISION;
   const hasNonDefaultRange = range !== DEFAULT_RANGE;
   const hasNonDefaultCategory = category !== DEFAULT_CATEGORY;
   const hasNonDefaultLimit = headlineLimit !== DEFAULT_HEADLINE_LIMIT;
 
   const showFilterChips =
-    hasNonDefaultRegion || hasNonDefaultCountry || hasNonDefaultRange || hasNonDefaultCategory || hasNonDefaultLimit;
+    hasNonDefaultRegion || hasNonDefaultSubdivision || hasNonDefaultRange || hasNonDefaultCategory || hasNonDefaultLimit;
 
   const showEmptyState = !loading && !loadError && clusters.length > 0 && filteredClusters.length === 0;
   const freshnessText = !loadError ? freshnessLabel(freshnessAgeS) : "";
@@ -1170,32 +1266,32 @@ export default function Home() {
 
     setRegion(nextRegion);
 
-    const nextCountries = await fetchCountriesForRegion(nextRegion);
-    setCountriesData(nextCountries);
+    const nextSubdivisions = await fetchSubdivisionsForRegion(nextRegion);
+    setSubdivisionsData(nextSubdivisions);
 
-    const nextCountry = defaultCountryForRegion(nextRegion, regionOptionsForUi, nextCountries);
-    setCountry(nextCountry);
+    const nextSubdivision = defaultSubdivisionForRegion(nextRegion, regionOptionsForUi, nextSubdivisions);
+    setSubdivision(nextSubdivision);
 
-    await loadTopStories(nextRegion, range, nextCountry, headlineLimit);
+    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
   }
 
-  async function handleCountryChange(nextCountry: string) {
-    setCountry(nextCountry);
-    await loadTopStories(region, range, nextCountry, headlineLimit);
+  async function handleSubdivisionChange(nextSubdivision: string) {
+    setSubdivision(nextSubdivision);
+    await loadTopStories(region, range, nextSubdivision, headlineLimit);
   }
 
   async function handleRangeChange(nextRange: string) {
     setRange(nextRange);
-    await loadTopStories(region, nextRange, country, headlineLimit);
+    await loadTopStories(region, nextRange, subdivision, headlineLimit);
   }
 
   async function handleHeadlineLimitChange(nextLimit: HeadlineLimit) {
     setHeadlineLimit(nextLimit);
-    await loadTopStories(region, range, country, nextLimit);
+    await loadTopStories(region, range, subdivision, nextLimit);
   }
 
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
-  const selectedCountryName = countryOptions.find((c) => c.key === country)?.name || "News";
+  const selectedSubdivisionName = subdivisionOptions.find((c) => c.key === subdivision)?.name || "News";
 
   const subscribeInsertIndex = filteredClusters.length >= 4 ? 3 : -1;
 
@@ -1298,9 +1394,9 @@ export default function Home() {
                   Region: {selectedRegionName}
                 </span>
               ) : null}
-              {hasNonDefaultCountry ? (
+              {hasNonDefaultSubdivision ? (
                 <span className="rounded-full border border-gray-300 px-3 py-1 dark:border-gray-700">
-                  Country: {selectedCountryName}
+                  {subdivisionLabel}: {selectedSubdivisionName}
                 </span>
               ) : null}
               {hasNonDefaultRange ? (
@@ -1333,7 +1429,7 @@ export default function Home() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white">{selectedCountryName} News</h2>
+              <h2 className="text-3xl font-bold tracking-tight text-gray-950 dark:text-white">{selectedSubdivisionName} News</h2>
 
               <button
                 onClick={() => setShareOpen(true)}
@@ -1372,7 +1468,7 @@ export default function Home() {
                 ) : null}
               </div>
               <button
-                onClick={() => loadTopStories(region, range, country, headlineLimit)}
+                onClick={() => loadTopStories(region, range, subdivision, headlineLimit)}
                 className="inline-flex items-center whitespace-nowrap rounded-full border border-gray-900 bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
               >
                 Retry
@@ -1420,6 +1516,8 @@ export default function Home() {
           const st = enrichState[link]?.status || "idle";
           const errMsg = enrichState[link]?.message || GENERIC_ENRICH_ERROR;
 
+          const displayFlag = a.subdivision_flag_url || a.country_flag_url || "";
+
           return (
             <div key={c.cluster_id}>
               {subscribeInsertIndex === index ? (
@@ -1462,7 +1560,7 @@ export default function Home() {
               >
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    {a.country_flag_url ? <img src={a.country_flag_url} alt="Flag" className="h-4 w-auto rounded-sm" /> : null}
+                    {displayFlag ? <img src={displayFlag} alt="Flag" className="h-4 w-auto rounded-sm" /> : null}
 
                     {showLogo ? (
                       <img
@@ -1580,13 +1678,13 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Country</label>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{subdivisionLabel}</label>
                 <select
-                  value={country}
-                  onChange={(e) => void handleCountryChange(e.target.value)}
+                  value={subdivision}
+                  onChange={(e) => void handleSubdivisionChange(e.target.value)}
                   className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                 >
-                  {countryOptions.map((c) => (
+                  {subdivisionOptions.map((c) => (
                     <option key={c.key} value={c.key}>
                       {c.name}
                     </option>
@@ -1788,7 +1886,7 @@ export default function Home() {
                     <span className="text-gray-800 dark:text-white/80">Search quickly:</span> keep search visible on the main screen for fast filtering.
                   </li>
                   <li>
-                    <span className="text-gray-800 dark:text-white/80">Open filters when needed:</span> region, country, date range, category, and headline limit are all available in the Filters panel.
+                    <span className="text-gray-800 dark:text-white/80">Open filters when needed:</span> region, subdivision, date range, category, and headline limit are all available in the Filters panel.
                   </li>
                   <li>
                     <span className="text-gray-800 dark:text-white/80">Switch regions over time:</span> Mercosur is live now, with more regional editions planned.
