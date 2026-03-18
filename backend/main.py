@@ -71,11 +71,16 @@ REGIONS: Dict[str, Dict[str, Any]] = {
         "name": "Mexico",
         "status": "coming-soon",
         "subdivision_label": "State",
-        "default_subdivision": "mx",
-        "default_country": "mx",  # transitional compatibility only
+        "default_subdivision": "all",
+        "default_country": "all",  # transitional compatibility only
         "aliases": ["mexico", "mx"],
         "subdivisions": {
-            "mx": {"code": "MX", "name": "Mexico", "flag_url": "https://flagcdn.com/w40/mx.png"},
+            "all": {"code": "ALL", "name": "All Mexico", "flag_url": ""},
+            "cdmx": {"code": "CDMX", "name": "CDMX", "flag_url": ""},
+            "jalisco": {"code": "JAL", "name": "Jalisco", "flag_url": ""},
+            "nuevo-leon": {"code": "NL", "name": "Nuevo León", "flag_url": ""},
+            "edomex": {"code": "MEX", "name": "Estado de México", "flag_url": ""},
+            "yucatan": {"code": "YUC", "name": "Yucatán", "flag_url": ""},
         },
     },
     "central-america": {
@@ -88,6 +93,13 @@ REGIONS: Dict[str, Dict[str, Any]] = {
         "aliases": ["central-america", "central", "central_america", "centralamerica"],
         "subdivisions": {
             "all": {"code": "ALL", "name": "All Central America", "flag_url": ""},
+            "gt": {"code": "GT", "name": "Guatemala", "flag_url": "https://flagcdn.com/w40/gt.png"},
+            "cr": {"code": "CR", "name": "Costa Rica", "flag_url": "https://flagcdn.com/w40/cr.png"},
+            "pa": {"code": "PA", "name": "Panama", "flag_url": "https://flagcdn.com/w40/pa.png"},
+            "sv": {"code": "SV", "name": "El Salvador", "flag_url": "https://flagcdn.com/w40/sv.png"},
+            "hn": {"code": "HN", "name": "Honduras", "flag_url": "https://flagcdn.com/w40/hn.png"},
+            "ni": {"code": "NI", "name": "Nicaragua", "flag_url": "https://flagcdn.com/w40/ni.png"},
+            "bz": {"code": "BZ", "name": "Belize", "flag_url": "https://flagcdn.com/w40/bz.png"},
         },
     },
 }
