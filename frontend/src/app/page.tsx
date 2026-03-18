@@ -68,7 +68,7 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
   {
     key: "mexico",
     name: "Mexico",
-    status: "coming-soon",
+    status: "live",
     subdivision_label: "State",
     default_subdivision: "all",
     default_country: "all",
@@ -91,26 +91,6 @@ const FALLBACK_MERCOSUR_SUBDIVISIONS: SubdivisionOption[] = [
   { key: "br", code: "BR", name: "Brazil", flag_url: "https://flagcdn.com/w40/br.png" },
   { key: "py", code: "PY", name: "Paraguay", flag_url: "https://flagcdn.com/w40/py.png" },
   { key: "bo", code: "BO", name: "Bolivia", flag_url: "https://flagcdn.com/w40/bo.png" },
-];
-
-const FALLBACK_MEXICO_SUBDIVISIONS: SubdivisionOption[] = [
-  { key: "all", code: "ALL", name: "All Mexico", flag_url: "" },
-  { key: "cdmx", code: "CDMX", name: "CDMX", flag_url: "" },
-  { key: "jalisco", code: "JAL", name: "Jalisco", flag_url: "" },
-  { key: "nuevo-leon", code: "NL", name: "Nuevo León", flag_url: "" },
-  { key: "edomex", code: "MEX", name: "Estado de México", flag_url: "" },
-  { key: "yucatan", code: "YUC", name: "Yucatán", flag_url: "" },
-];
-
-const FALLBACK_CENTRAL_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
-  { key: "all", code: "ALL", name: "All Central America", flag_url: "" },
-  { key: "gt", code: "GT", name: "Guatemala", flag_url: "https://flagcdn.com/w40/gt.png" },
-  { key: "cr", code: "CR", name: "Costa Rica", flag_url: "https://flagcdn.com/w40/cr.png" },
-  { key: "pa", code: "PA", name: "Panama", flag_url: "https://flagcdn.com/w40/pa.png" },
-  { key: "sv", code: "SV", name: "El Salvador", flag_url: "https://flagcdn.com/w40/sv.png" },
-  { key: "hn", code: "HN", name: "Honduras", flag_url: "https://flagcdn.com/w40/hn.png" },
-  { key: "ni", code: "NI", name: "Nicaragua", flag_url: "https://flagcdn.com/w40/ni.png" },
-  { key: "bz", code: "BZ", name: "Belize", flag_url: "https://flagcdn.com/w40/bz.png" },
 ];
 
 const HEADLINE_LIMIT_OPTIONS: HeadlineLimit[] = [30, 50, 100, 200];
@@ -436,8 +416,16 @@ function getFallbackRegionOption(key: string) {
 
 function getFallbackSubdivisionsForRegion(regionKey: string): SubdivisionOption[] {
   if (regionKey === "mercosur") return FALLBACK_MERCOSUR_SUBDIVISIONS;
-  if (regionKey === "mexico") return FALLBACK_MEXICO_SUBDIVISIONS;
-  if (regionKey === "central-america") return FALLBACK_CENTRAL_AMERICA_SUBDIVISIONS;
+  if (regionKey === "mexico") {
+    return [
+      { key: "all", code: "ALL", name: "All Mexico", flag_url: "" },
+      { key: "cdmx", code: "CDMX", name: "CDMX", flag_url: "" },
+      { key: "jalisco", code: "JAL", name: "Jalisco", flag_url: "" },
+      { key: "nuevo-leon", code: "NL", name: "Nuevo León", flag_url: "" },
+      { key: "edomex", code: "MEX", name: "Estado de México", flag_url: "" },
+      { key: "yucatan", code: "YUC", name: "Yucatán", flag_url: "" },
+    ];
+  }
   return [];
 }
 
@@ -2016,7 +2004,7 @@ export default function Home() {
                       <span className="text-gray-800 dark:text-white/80">Open filters when needed:</span> region, subdivision, date range, category, and headline limit are all available in the Filters panel.
                     </li>
                     <li>
-                      <span className="text-gray-800 dark:text-white/80">Switch regions over time:</span> Mercosur is live now, with more regional editions planned.
+                      <span className="text-gray-800 dark:text-white/80">Switch regions over time:</span> Mercosur and Mexico are live now, with more regional editions planned.
                     </li>
                   </ul>
                 </div>
