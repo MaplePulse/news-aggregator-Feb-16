@@ -69,7 +69,7 @@ REGIONS: Dict[str, Dict[str, Any]] = {
     "mexico": {
         "key": "mexico",
         "name": "Mexico",
-        "status": "coming-soon",
+        "status": "live",
         "subdivision_label": "State",
         "default_subdivision": "all",
         "default_country": "all",  # transitional compatibility only
@@ -255,6 +255,34 @@ SOURCES: List[Dict[str, Any]] = [
         "country_flag_url": None,
         "source_logo": "https://en.mercopress.com/favicon.ico",
         "feed_url": "https://en.mercopress.com/rss/mercosur",
+    },
+
+    # --- Mexico (MX) - cleaned live launch feeds only ---
+    {
+        "id": "la_jornada_mx_estados",
+        "name": "La Jornada - Estados (MX)",
+        "region_key": "mexico",
+        "subdivision_key": "all",
+        "country_key": "all",
+        "subdivision_code": "ALL",
+        "country_code": "ALL",
+        "subdivision_flag_url": "https://flagcdn.com/w40/mx.png",
+        "country_flag_url": "https://flagcdn.com/w40/mx.png",
+        "source_logo": "https://www.jornada.com.mx/favicon.ico",
+        "feed_url": "https://www.jornada.com.mx/rss/estados.xml?v=1",
+    },
+    {
+        "id": "la_jornada_mx_cdmx_capital",
+        "name": "La Jornada - Capital (CDMX)",
+        "region_key": "mexico",
+        "subdivision_key": "cdmx",
+        "country_key": "cdmx",
+        "subdivision_code": "CDMX",
+        "country_code": "CDMX",
+        "subdivision_flag_url": "https://flagcdn.com/w40/mx.png",
+        "country_flag_url": "https://flagcdn.com/w40/mx.png",
+        "source_logo": "https://www.jornada.com.mx/favicon.ico",
+        "feed_url": "https://www.jornada.com.mx/rss/capital.xml?v=1",
     },
 ]
 
@@ -921,7 +949,7 @@ def _env_bool(key: str, default: bool = False) -> bool:
     if v in ("1", "true", "yes", "on"):
         return True
     if v in ("0", "false", "no", "off"):
-        return False
+            return False
     return default
 
 
@@ -1241,7 +1269,7 @@ def _map_source_category_to_topic(cat: str) -> Optional[str]:
     if any(x in c for x in ["cultura", "culture", "arte", "artes", "cine", "teatro", "musica", "música", "festival", "literatura"]):
         return "Culture"
 
-    if any(x in c for x in ["nacional", "nacionales", "pais", "país", "uruguay", "argentina", "brasil", "paraguay", "bolivia"]):
+    if any(x in c for x in ["nacional", "nacionales", "pais", "país", "uruguay", "argentina", "brasil", "paraguay", "bolivia", "mexico", "méxico"]):
         return "Society"
 
     return None
@@ -2577,6 +2605,13 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
             else:
                 if source_subdivision_key != s_key:
                     continue
+        elif r == "mexico":
+            if s_key == "all":
+                if source_subdivision_key not in {"all", "cdmx"}:
+                    continue
+            else:
+                if source_subdivision_key not in {s_key, "all"}:
+                    continue
         else:
             if source_subdivision_key != s_key:
                 continue
@@ -3114,9 +3149,9 @@ def _worker_loop() -> None:
 
     subdivisions = _env_list("PRE_ENRICH_SUBDIVISIONS", "")
     if not subdivisions:
-        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,mp,all")
+        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,mp,all,cdmx")
     if not subdivisions:
-        subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all"]
+        subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all", "cdmx"]
 
     scan_limit = _env_int("PRE_ENRICH_SCAN_LIMIT", _env_int("PRE_ENRICH_MAX_ITEMS_PER_RUN", 60))
     max_new_per_bucket = _env_int("PRE_ENRICH_MAX_NEW_PER_BUCKET", 15)
