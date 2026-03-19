@@ -86,7 +86,7 @@ REGIONS: Dict[str, Dict[str, Any]] = {
     "central-america": {
         "key": "central-america",
         "name": "Central America",
-        "status": "coming-soon",
+        "status": "live",
         "subdivision_label": "Country",
         "default_subdivision": "all",
         "default_country": "all",  # transitional compatibility only
@@ -441,6 +441,297 @@ SOURCES: List[Dict[str, Any]] = [
         "country_flag_url": "https://flagcdn.com/w40/mx.png",
         "source_logo": "https://www.yucatan.com.mx/favicon.ico",
         "feed_url": "https://www.yucatan.com.mx/feed/",
+    },
+
+    # =====================================================================
+    # --- Central America ---
+    # =====================================================================
+
+    # --- Guatemala (GT) ---
+    {
+        "id": "prensa_libre_gt",
+        "name": "Prensa Libre (GT)",
+        "region_key": "central-america",
+        "subdivision_key": "gt",
+        "country_key": "gt",
+        "subdivision_code": "GT",
+        "country_code": "GT",
+        "subdivision_flag_url": "https://flagcdn.com/w40/gt.png",
+        "country_flag_url": "https://flagcdn.com/w40/gt.png",
+        "source_logo": "https://www.prensalibre.com/favicon.ico",
+        "feed_url": "https://www.prensalibre.com/feed/",
+    },
+    {
+        "id": "la_hora_gt",
+        "name": "La Hora (GT)",
+        "region_key": "central-america",
+        "subdivision_key": "gt",
+        "country_key": "gt",
+        "subdivision_code": "GT",
+        "country_code": "GT",
+        "subdivision_flag_url": "https://flagcdn.com/w40/gt.png",
+        "country_flag_url": "https://flagcdn.com/w40/gt.png",
+        "source_logo": "https://lahora.gt/favicon.ico",
+        "feed_url": "https://lahora.gt/feed/",
+    },
+    {
+        "id": "republica_gt",
+        "name": "República (GT)",
+        "region_key": "central-america",
+        "subdivision_key": "gt",
+        "country_key": "gt",
+        "subdivision_code": "GT",
+        "country_code": "GT",
+        "subdivision_flag_url": "https://flagcdn.com/w40/gt.png",
+        "country_flag_url": "https://flagcdn.com/w40/gt.png",
+        "source_logo": "https://republica.gt/favicon.ico",
+        "feed_url": "https://republica.gt/feed",
+    },
+    {
+        "id": "emisoras_unidas_gt",
+        "name": "Emisoras Unidas (GT)",
+        "region_key": "central-america",
+        "subdivision_key": "gt",
+        "country_key": "gt",
+        "subdivision_code": "GT",
+        "country_code": "GT",
+        "subdivision_flag_url": "https://flagcdn.com/w40/gt.png",
+        "country_flag_url": "https://flagcdn.com/w40/gt.png",
+        "source_logo": "https://emisorasunidas.com/favicon.ico",
+        "feed_url": "https://emisorasunidas.com/feed/",
+    },
+
+    # --- Costa Rica (CR) ---
+    {
+        "id": "la_nacion_cr",
+        "name": "La Nación (CR)",
+        "region_key": "central-america",
+        "subdivision_key": "cr",
+        "country_key": "cr",
+        "subdivision_code": "CR",
+        "country_code": "CR",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cr.png",
+        "country_flag_url": "https://flagcdn.com/w40/cr.png",
+        "source_logo": "https://www.nacion.com/favicon.ico",
+        "feed_url": "https://www.nacion.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "delfino_cr",
+        "name": "Delfino (CR)",
+        "region_key": "central-america",
+        "subdivision_key": "cr",
+        "country_key": "cr",
+        "subdivision_code": "CR",
+        "country_code": "CR",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cr.png",
+        "country_flag_url": "https://flagcdn.com/w40/cr.png",
+        "source_logo": "https://delfino.cr/favicon.ico",
+        "feed_url": "https://delfino.cr/feed",
+    },
+    {
+        "id": "semanario_ucr_cr",
+        "name": "Semanario Universidad (CR)",
+        "region_key": "central-america",
+        "subdivision_key": "cr",
+        "country_key": "cr",
+        "subdivision_code": "CR",
+        "country_code": "CR",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cr.png",
+        "country_flag_url": "https://flagcdn.com/w40/cr.png",
+        "source_logo": "https://semanariouniversidad.com/favicon.ico",
+        "feed_url": "https://semanariouniversidad.com/feed/",
+    },
+    {
+        "id": "elmundo_cr",
+        "name": "El Mundo (CR)",
+        "region_key": "central-america",
+        "subdivision_key": "cr",
+        "country_key": "cr",
+        "subdivision_code": "CR",
+        "country_code": "CR",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cr.png",
+        "country_flag_url": "https://flagcdn.com/w40/cr.png",
+        "source_logo": "https://www.elmundo.cr/favicon.ico",
+        "feed_url": "https://www.elmundo.cr/feed/",
+    },
+    {
+        "id": "diarioextra_cr",
+        "name": "Diario Extra (CR)",
+        "region_key": "central-america",
+        "subdivision_key": "cr",
+        "country_key": "cr",
+        "subdivision_code": "CR",
+        "country_code": "CR",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cr.png",
+        "country_flag_url": "https://flagcdn.com/w40/cr.png",
+        "source_logo": "https://www.diarioextra.com/favicon.ico",
+        "feed_url": "https://www.diarioextra.com/rss",
+    },
+
+    # --- El Salvador (SV) ---
+    {
+        "id": "elsalvador_com_sv",
+        "name": "ElSalvador.com (SV)",
+        "region_key": "central-america",
+        "subdivision_key": "sv",
+        "country_key": "sv",
+        "subdivision_code": "SV",
+        "country_code": "SV",
+        "subdivision_flag_url": "https://flagcdn.com/w40/sv.png",
+        "country_flag_url": "https://flagcdn.com/w40/sv.png",
+        "source_logo": "https://www.elsalvador.com/favicon.ico",
+        "feed_url": "https://www.elsalvador.com/feed/",
+    },
+    {
+        "id": "contrapunto_sv",
+        "name": "Contrapunto (SV)",
+        "region_key": "central-america",
+        "subdivision_key": "sv",
+        "country_key": "sv",
+        "subdivision_code": "SV",
+        "country_code": "SV",
+        "subdivision_flag_url": "https://flagcdn.com/w40/sv.png",
+        "country_flag_url": "https://flagcdn.com/w40/sv.png",
+        "source_logo": "https://www.contrapunto.com.sv/favicon.ico",
+        "feed_url": "https://www.contrapunto.com.sv/feed/",
+    },
+    {
+        "id": "diario_co_latino_sv",
+        "name": "Diario Co Latino (SV)",
+        "region_key": "central-america",
+        "subdivision_key": "sv",
+        "country_key": "sv",
+        "subdivision_code": "SV",
+        "country_code": "SV",
+        "subdivision_flag_url": "https://flagcdn.com/w40/sv.png",
+        "country_flag_url": "https://flagcdn.com/w40/sv.png",
+        "source_logo": "https://www.diariocolatino.com/favicon.ico",
+        "feed_url": "https://www.diariocolatino.com/feed/",
+    },
+
+    # --- Honduras (HN) ---
+    {
+        "id": "conexihon_hn",
+        "name": "Conexihon (HN)",
+        "region_key": "central-america",
+        "subdivision_key": "hn",
+        "country_key": "hn",
+        "subdivision_code": "HN",
+        "country_code": "HN",
+        "subdivision_flag_url": "https://flagcdn.com/w40/hn.png",
+        "country_flag_url": "https://flagcdn.com/w40/hn.png",
+        "source_logo": "https://www.conexihon.hn/favicon.ico",
+        "feed_url": "https://www.conexihon.hn/feed/",
+    },
+    {
+        "id": "criterio_hn",
+        "name": "Criterio (HN)",
+        "region_key": "central-america",
+        "subdivision_key": "hn",
+        "country_key": "hn",
+        "subdivision_code": "HN",
+        "country_code": "HN",
+        "subdivision_flag_url": "https://flagcdn.com/w40/hn.png",
+        "country_flag_url": "https://flagcdn.com/w40/hn.png",
+        "source_logo": "https://criterio.hn/favicon.ico",
+        "feed_url": "https://criterio.hn/feed/",
+    },
+    {
+        "id": "hondudiario_hn",
+        "name": "Hondudiario (HN)",
+        "region_key": "central-america",
+        "subdivision_key": "hn",
+        "country_key": "hn",
+        "subdivision_code": "HN",
+        "country_code": "HN",
+        "subdivision_flag_url": "https://flagcdn.com/w40/hn.png",
+        "country_flag_url": "https://flagcdn.com/w40/hn.png",
+        "source_logo": "https://hondudiario.com/favicon.ico",
+        "feed_url": "https://hondudiario.com/feed/",
+    },
+
+    # --- Nicaragua (NI) ---
+    {
+        "id": "confidencial_ni",
+        "name": "Confidencial (NI)",
+        "region_key": "central-america",
+        "subdivision_key": "ni",
+        "country_key": "ni",
+        "subdivision_code": "NI",
+        "country_code": "NI",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ni.png",
+        "country_flag_url": "https://flagcdn.com/w40/ni.png",
+        "source_logo": "https://confidencial.digital/favicon.ico",
+        "feed_url": "https://confidencial.digital/feed/",
+    },
+    {
+        "id": "nicaragua_investiga_ni",
+        "name": "Nicaragua Investiga (NI)",
+        "region_key": "central-america",
+        "subdivision_key": "ni",
+        "country_key": "ni",
+        "subdivision_code": "NI",
+        "country_code": "NI",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ni.png",
+        "country_flag_url": "https://flagcdn.com/w40/ni.png",
+        "source_logo": "https://nicaraguainvestiga.com/favicon.ico",
+        "feed_url": "https://nicaraguainvestiga.com/feed/",
+    },
+
+    # --- Panama (PA) ---
+    {
+        "id": "newsroom_pa",
+        "name": "Newsroom Panama (PA)",
+        "region_key": "central-america",
+        "subdivision_key": "pa",
+        "country_key": "pa",
+        "subdivision_code": "PA",
+        "country_code": "PA",
+        "subdivision_flag_url": "https://flagcdn.com/w40/pa.png",
+        "country_flag_url": "https://flagcdn.com/w40/pa.png",
+        "source_logo": "https://newsroompanama.com/favicon.ico",
+        "feed_url": "https://newsroompanama.com/feed",
+    },
+
+    # --- Belize (BZ) ---
+    {
+        "id": "breaking_belize_news_bz",
+        "name": "Breaking Belize News (BZ)",
+        "region_key": "central-america",
+        "subdivision_key": "bz",
+        "country_key": "bz",
+        "subdivision_code": "BZ",
+        "country_code": "BZ",
+        "subdivision_flag_url": "https://flagcdn.com/w40/bz.png",
+        "country_flag_url": "https://flagcdn.com/w40/bz.png",
+        "source_logo": "https://www.breakingbelizenews.com/favicon.ico",
+        "feed_url": "https://www.breakingbelizenews.com/feed/",
+    },
+    {
+        "id": "amandala_bz",
+        "name": "Amandala (BZ)",
+        "region_key": "central-america",
+        "subdivision_key": "bz",
+        "country_key": "bz",
+        "subdivision_code": "BZ",
+        "country_code": "BZ",
+        "subdivision_flag_url": "https://flagcdn.com/w40/bz.png",
+        "country_flag_url": "https://flagcdn.com/w40/bz.png",
+        "source_logo": "https://amandala.com.bz/news/favicon.ico",
+        "feed_url": "https://amandala.com.bz/news/feed/",
+    },
+    {
+        "id": "love_fm_bz",
+        "name": "Love FM (BZ)",
+        "region_key": "central-america",
+        "subdivision_key": "bz",
+        "country_key": "bz",
+        "subdivision_code": "BZ",
+        "country_code": "BZ",
+        "subdivision_flag_url": "https://flagcdn.com/w40/bz.png",
+        "country_flag_url": "https://flagcdn.com/w40/bz.png",
+        "source_logo": "https://lovefm.com/favicon.ico",
+        "feed_url": "https://lovefm.com/feed/",
     },
 ]
 
@@ -2769,6 +3060,12 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
             else:
                 if source_subdivision_key not in {s_key, "all"}:
                     continue
+        elif r == "central-america":
+            if s_key == "all":
+                pass  # include all Central America feeds regardless of subdivision
+            else:
+                if source_subdivision_key not in {s_key, "all"}:
+                    continue
         else:
             if source_subdivision_key != s_key:
                 continue
@@ -3306,7 +3603,7 @@ def _worker_loop() -> None:
 
     subdivisions = _env_list("PRE_ENRICH_SUBDIVISIONS", "")
     if not subdivisions:
-        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,mp,all,cdmx,jalisco,nuevo-leon,edomex,yucatan")
+        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,mp,all,cdmx,jalisco,nuevo-leon,edomex,yucatan,gt,cr,sv,hn,ni,pa,bz")
     if not subdivisions:
         subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all", "cdmx"]
 
