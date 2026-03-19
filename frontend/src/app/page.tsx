@@ -76,7 +76,7 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
   {
     key: "central-america",
     name: "Central America",
-    status: "coming-soon",
+    status: "live",
     subdivision_label: "Country",
     default_subdivision: "all",
     default_country: "all",
