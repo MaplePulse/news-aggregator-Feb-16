@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 type Article = {
   title: string;
@@ -1362,7 +1362,14 @@ export default function Home() {
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
   const selectedSubdivisionName = subdivisionOptions.find((c) => c.key === subdivision)?.name || "News";
 
-  const subscribeInsertIndex = filteredClusters.length >= 4 ? 3 : -1;
+  // Show subscribe banner after the 2 featured cards, then every 8 cards
+  const SUBSCRIBE_BANNER_FIRST = 2;
+  const SUBSCRIBE_BANNER_INTERVAL = 8;
+  function shouldShowBanner(idx: number): boolean {
+    if (filteredClusters.length < 4) return false;
+    if (idx === SUBSCRIBE_BANNER_FIRST) return true;
+    return idx > SUBSCRIBE_BANNER_FIRST && (idx - SUBSCRIBE_BANNER_FIRST) % SUBSCRIBE_BANNER_INTERVAL === 0;
+  }
 
   return (
     <>
@@ -1648,9 +1655,9 @@ export default function Home() {
             const displayFlag = a.subdivision_flag_url || a.country_flag_url || "";
 
             return (
-              <div key={c.cluster_id} className={isFeatured ? "lg:col-span-2" : ""}>
-                {subscribeInsertIndex === index ? (
-                  <section className="mb-5 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-5 shadow-sm dark:border-amber-500/20 dark:from-amber-500/10 dark:via-black/40 dark:to-amber-500/10 lg:mb-6">
+              <Fragment key={c.cluster_id}>
+                {shouldShowBanner(index) ? (
+                  <section className="lg:col-span-2 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-5 shadow-sm dark:border-amber-500/20 dark:from-amber-500/10 dark:via-black/40 dark:to-amber-500/10">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div className="min-w-0">
                         <div className="inline-flex items-center rounded-full border border-amber-300 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-white/5 dark:text-amber-300">
@@ -1682,7 +1689,7 @@ export default function Home() {
                   }}
                   data-link={a.link}
                   className={`rounded-3xl border shadow-sm transition ${
-                    isFeatured ? "p-6 sm:p-8" : "p-5 sm:p-6"
+                    isFeatured ? "lg:col-span-2 p-6 sm:p-8" : "p-5 sm:p-6"
                   } ${
                     translatedReady
                       ? "border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.02]"
@@ -1766,7 +1773,7 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </Fragment>
             );
           })}
         </div>
