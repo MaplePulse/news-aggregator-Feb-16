@@ -482,34 +482,39 @@ export default function Home() {
   const [prefsReady, setPrefsReady] = useState(false);
   const [showStartupSplash, setShowStartupSplash] = useState(true);
 
-  const [infoOpen, setInfoOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [infoOpen, setInfoOpenRaw] = useState(false);
+  const [shareOpen, setShareOpenRaw] = useState(false);
   const [filtersOpen, setFiltersOpenRaw] = useState(false);
 
-  // Wrap filtersOpen so the Android/browser back button closes the modal
-  // instead of navigating away from the site.
+  // Back button closes modals instead of leaving the site.
+  // Push a history entry when opening; pop it when closing.
+  const setInfoOpen = useCallback((open: boolean) => {
+    if (open) { window.history.pushState({ modal: "info" }, ""); }
+    else if (window.history.state?.modal === "info") { window.history.back(); }
+    setInfoOpenRaw(open);
+  }, []);
+
+  const setShareOpen = useCallback((open: boolean) => {
+    if (open) { window.history.pushState({ modal: "share" }, ""); }
+    else if (window.history.state?.modal === "share") { window.history.back(); }
+    setShareOpenRaw(open);
+  }, []);
+
   const setFiltersOpen = useCallback((open: boolean) => {
-    if (open) {
-      window.history.pushState({ modal: "filters" }, "");
-    } else {
-      // Only pop if we pushed a filters entry
-      if (window.history.state?.modal === "filters") {
-        window.history.back();
-      }
-    }
+    if (open) { window.history.pushState({ modal: "filters" }, ""); }
+    else if (window.history.state?.modal === "filters") { window.history.back(); }
     setFiltersOpenRaw(open);
   }, []);
 
   useEffect(() => {
-    function onPopState(e: PopStateEvent) {
-      // If the filters modal is open and the user pressed back, close it
-      if (filtersOpen) {
-        setFiltersOpenRaw(false);
-      }
+    function onPopState() {
+      if (filtersOpen) setFiltersOpenRaw(false);
+      if (infoOpen) setInfoOpenRaw(false);
+      if (shareOpen) setShareOpenRaw(false);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [filtersOpen]);
+  }, [filtersOpen, infoOpen, shareOpen]);
 
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
