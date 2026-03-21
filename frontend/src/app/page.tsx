@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Article = {
   title: string;
@@ -484,7 +484,32 @@ export default function Home() {
 
   const [infoOpen, setInfoOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpenRaw] = useState(false);
+
+  // Wrap filtersOpen so the Android/browser back button closes the modal
+  // instead of navigating away from the site.
+  const setFiltersOpen = useCallback((open: boolean) => {
+    if (open) {
+      window.history.pushState({ modal: "filters" }, "");
+    } else {
+      // Only pop if we pushed a filters entry
+      if (window.history.state?.modal === "filters") {
+        window.history.back();
+      }
+    }
+    setFiltersOpenRaw(open);
+  }, []);
+
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      // If the filters modal is open and the user pressed back, close it
+      if (filtersOpen) {
+        setFiltersOpenRaw(false);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [filtersOpen]);
 
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
