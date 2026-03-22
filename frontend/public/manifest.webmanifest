@@ -1,7 +1,7 @@
 
 {
   "name": "Regional Pulse News",
-  "short_name": "Regional Pulse",
+  "short_name": "Pulse News",
   "description": "Regional news intelligence — Latin America in English",
   "start_url": "/",
   "display": "standalone",
