@@ -1506,11 +1506,10 @@ export default function Home() {
 
                 <button
                   onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-                  className="inline-flex min-h-9 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 shadow-sm transition hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-white/[0.04]"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
                   aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
                 >
                   {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
-                  <span>{mounted ? (theme === "dark" ? "Light" : "Dark") : "Theme"}</span>
                 </button>
               </div>
             </div>
