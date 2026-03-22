@@ -3882,8 +3882,7 @@ def _send_feedback_email(name: str, email: str, message: str) -> None:
     )
     msg.attach(MIMEText(body, "plain"))
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, [smtp_to], msg.as_string())
 
