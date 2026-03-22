@@ -135,6 +135,8 @@ const STORAGE_KEYS = {
   range: "mercosur-news-range",
   category: "mercosur-news-category",
   headlineLimit: "mercosur-news-headline-limit",
+  subscribed: "pulse-news-subscribed",
+  customerId: "pulse-news-customer-id",
 } as const;
 
 const DEFAULT_REGION = "mercosur";
@@ -495,6 +497,18 @@ export default function Home() {
   const [fbSent, setFbSent] = useState(false);
   const [fbError, setFbError] = useState("");
 
+  // Subscription state
+  const [subscribed, setSubscribed] = useState(false);
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [subscribeOpen, setSubscribeOpenRaw] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+
+  const setSubscribeOpen = useCallback((open: boolean) => {
+    if (open) { window.history.pushState({ modal: "subscribe" }, ""); }
+    else if (window.history.state?.modal === "subscribe") { window.history.back(); }
+    setSubscribeOpenRaw(open);
+  }, []);
+
   // Back button closes modals instead of leaving the site.
   // Push a history entry when opening; pop it when closing.
   const setInfoOpen = useCallback((open: boolean) => {
@@ -528,10 +542,11 @@ export default function Home() {
       if (infoOpen) setInfoOpenRaw(false);
       if (shareOpen) setShareOpenRaw(false);
       if (feedbackOpen) setFeedbackOpenRaw(false);
+      if (subscribeOpen) setSubscribeOpenRaw(false);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [filtersOpen, infoOpen, shareOpen, feedbackOpen]);
+  }, [filtersOpen, infoOpen, shareOpen, feedbackOpen, subscribeOpen]);
 
   async function handleFeedbackSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -555,6 +570,98 @@ export default function Home() {
       setFbSending(false);
     }
   }
+
+  // Subscribe handler — opens Stripe Checkout
+  async function handleSubscribe(plan: "monthly" | "yearly") {
+    setSubscribing(true);
+    try {
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Something went wrong. Please try again.");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setSubscribing(false);
+    }
+  }
+
+  // Manage subscription — opens Stripe Customer Portal
+  async function handleManageSubscription() {
+    if (!customerId) return;
+    try {
+      const res = await fetch("/api/create-portal-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      // silent
+    }
+  }
+
+  // On mount: check for Stripe return & load saved subscription state
+  useEffect(() => {
+    // Load saved subscription
+    const saved = window.localStorage.getItem(STORAGE_KEYS.subscribed);
+    const savedCust = window.localStorage.getItem(STORAGE_KEYS.customerId);
+    if (saved === "true") {
+      setSubscribed(true);
+      if (savedCust) setCustomerId(savedCust);
+    }
+
+    // Check for Stripe checkout return
+    const params = new URLSearchParams(window.location.search);
+    const subscribeStatus = params.get("subscribe");
+    const sessionId = params.get("session_id");
+
+    if (subscribeStatus === "success" && sessionId) {
+      // Verify the subscription with Stripe
+      fetch(`/api/verify-subscription?session_id=${encodeURIComponent(sessionId)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.subscribed) {
+            setSubscribed(true);
+            setCustomerId(data.customerId || null);
+            window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
+            if (data.customerId) {
+              window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
+            }
+          }
+        })
+        .catch(() => {});
+
+      // Clean up the URL
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("subscribe");
+      clean.searchParams.delete("session_id");
+      window.history.replaceState({}, "", clean.pathname + clean.search);
+    } else if (subscribeStatus === "cancel") {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("subscribe");
+      window.history.replaceState({}, "", clean.pathname + clean.search);
+    }
+  }, []);
+
+  // Persist subscription state
+  useEffect(() => {
+    if (!prefsReady) return;
+    window.localStorage.setItem(STORAGE_KEYS.subscribed, subscribed ? "true" : "false");
+    if (customerId) {
+      window.localStorage.setItem(STORAGE_KEYS.customerId, customerId);
+    }
+  }, [subscribed, customerId, prefsReady]);
 
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
@@ -1436,13 +1543,14 @@ export default function Home() {
   const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
   const selectedSubdivisionName = subdivisionOptions.find((c) => c.key === subdivision)?.name || "News";
 
-  // Show subscribe banner after the 2 featured cards, then every 8 cards
-  const SUBSCRIBE_BANNER_FIRST = 2;
-  const SUBSCRIBE_BANNER_INTERVAL = 8;
+  // Show ad/subscribe banners between articles (hidden for subscribers)
+  const AD_BANNER_FIRST = 2;
+  const AD_BANNER_INTERVAL = 8;
   function shouldShowBanner(idx: number): boolean {
+    if (subscribed) return false;
     if (filteredClusters.length < 4) return false;
-    if (idx === SUBSCRIBE_BANNER_FIRST) return true;
-    return idx > SUBSCRIBE_BANNER_FIRST && (idx - SUBSCRIBE_BANNER_FIRST) % SUBSCRIBE_BANNER_INTERVAL === 0;
+    if (idx === AD_BANNER_FIRST) return true;
+    return idx > AD_BANNER_FIRST && (idx - AD_BANNER_FIRST) % AD_BANNER_INTERVAL === 0;
   }
 
   return (
@@ -1748,28 +1856,23 @@ export default function Home() {
             return (
               <Fragment key={c.cluster_id}>
                 {shouldShowBanner(index) ? (
-                  <section className="lg:col-span-2 rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-amber-50 p-5 shadow-sm dark:border-amber-500/20 dark:from-amber-500/10 dark:via-black/40 dark:to-amber-500/10">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div className="min-w-0">
-                        <div className="inline-flex items-center rounded-full border border-amber-300 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-400/30 dark:bg-white/5 dark:text-amber-300">
-                          Upgrade
-                        </div>
-                        <h3 className="mt-3 text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
-                          Subscribe and keep the app ad free
-                        </h3>
-                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                          Enjoy a cleaner reading experience while supporting the continued growth of the app.
-                        </p>
+                  <section className="lg:col-span-2 rounded-3xl border border-gray-200/60 bg-gradient-to-r from-gray-50 via-white to-gray-50 p-5 shadow-sm dark:border-gray-800 dark:from-gray-900/50 dark:via-black/40 dark:to-gray-900/50">
+                    <div className="flex flex-col items-center gap-3 text-center py-2">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                        <span className="h-px w-6 bg-gray-300 dark:bg-gray-700" />
+                        Advertisement
+                        <span className="h-px w-6 bg-gray-300 dark:bg-gray-700" />
                       </div>
-
-                      <div className="shrink-0">
-                        <button
-                          className="inline-flex min-h-11 items-center rounded-full border border-gray-900 bg-gray-900 px-5 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 dark:border-white dark:bg-white dark:text-black"
-                          type="button"
-                        >
-                          Subscribe
-                        </button>
+                      <div className="flex h-16 items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 px-8 dark:border-gray-700 dark:bg-white/[0.02] w-full max-w-lg">
+                        <p className="text-sm text-gray-400 dark:text-gray-500">Ad space</p>
                       </div>
+                      <button
+                        onClick={() => setSubscribeOpen(true)}
+                        className="mt-1 text-sm font-medium text-blue-600 underline underline-offset-2 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                        type="button"
+                      >
+                        Go ad-free for $1.29/month
+                      </button>
                     </div>
                   </section>
                 ) : null}
@@ -2164,6 +2267,61 @@ export default function Home() {
           </div>
         ) : null}
 
+        {subscribeOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <button className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" aria-label="Close" onClick={() => setSubscribeOpen(false)} />
+            <div className="relative w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h3 className="text-xl font-semibold tracking-tight">Go Ad-Free</h3>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    Support Regional Pulse News and enjoy a cleaner reading experience.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSubscribeOpen(false)}
+                  className="shrink-0 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium hover:opacity-90 dark:border-gray-700"
+                  aria-label="Close modal"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => handleSubscribe("monthly")}
+                  disabled={subscribing}
+                  className="flex flex-col items-center gap-1 rounded-2xl border-2 border-gray-200 bg-white p-5 text-center shadow-sm transition hover:border-blue-400 hover:shadow-md dark:border-gray-700 dark:bg-white/[0.03] dark:hover:border-blue-500"
+                >
+                  <span className="text-2xl font-bold text-gray-950 dark:text-white">$1.29</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">per month</span>
+                </button>
+
+                <button
+                  onClick={() => handleSubscribe("yearly")}
+                  disabled={subscribing}
+                  className="relative flex flex-col items-center gap-1 rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center shadow-sm transition hover:shadow-md dark:border-blue-400 dark:bg-blue-500/10"
+                >
+                  <span className="absolute -top-2.5 rounded-full bg-blue-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                    Save 23%
+                  </span>
+                  <span className="text-2xl font-bold text-gray-950 dark:text-white">$11.99</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">per year</span>
+                  <span className="mt-0.5 text-xs text-blue-600 dark:text-blue-400">$1.00/month</span>
+                </button>
+              </div>
+
+              {subscribing ? (
+                <p className="mt-4 text-center text-sm text-gray-500">Redirecting to payment...</p>
+              ) : (
+                <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
+                  Secure payment via Stripe. Cancel anytime.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {infoOpen ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <button className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" aria-label="Close" onClick={() => setInfoOpen(false)} />
@@ -2283,6 +2441,30 @@ export default function Home() {
             </div>
           </div>
         ) : null}
+        {/* Subscription footer */}
+        <div className="mt-8 mb-4 flex justify-center">
+          {subscribed ? (
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-500/10 dark:text-green-400">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+                Ad-free subscriber
+              </span>
+              <button
+                onClick={handleManageSubscription}
+                className="text-xs text-gray-500 underline underline-offset-2 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                Manage subscription
+              </button>
+            </div>
+          ) : !loading && filteredClusters.length > 0 ? (
+            <button
+              onClick={() => setSubscribeOpen(true)}
+              className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+            >
+              Remove ads: subscribe from $1.29/month
+            </button>
+          ) : null}
+        </div>
       </main>
 
       {showStartupSplash ? (
