@@ -538,14 +538,14 @@ export default function Home() {
     setFbSending(true);
     setFbError("");
     try {
-      const res = await fetch("/api/feedback", {
+      const res = await fetch("https://formspree.io/f/xwvrjygl", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify({ name: fbName, email: fbEmail, message: fbMessage }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Something went wrong. Please try again.");
+        throw new Error(data.errors?.map((e: any) => e.message).join(", ") || "Something went wrong. Please try again.");
       }
       setFbSent(true);
       setFbName(""); setFbEmail(""); setFbMessage("");
