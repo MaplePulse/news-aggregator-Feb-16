@@ -1619,10 +1619,43 @@ export default function Home() {
                 >
                   {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
                 </button>
+
+                {subscribed ? (
+                  <button
+                    onClick={handleManageSubscription}
+                    aria-label="Manage subscription"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-green-300 bg-green-50 text-green-600 shadow-sm transition hover:border-green-400 hover:bg-green-100 dark:border-green-700 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSubscribeOpen(true)}
+                    aria-label="Subscribe"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-blue-600 shadow-sm transition hover:border-blue-300 hover:text-blue-500 dark:border-gray-700 dark:bg-black dark:text-blue-400"
+                  >
+                    <span className="text-sm font-bold leading-none">$</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </section>
+
+        {subscribed ? (
+          <div className="mt-3 flex items-center justify-between rounded-2xl border border-green-200 bg-green-50/80 px-4 py-2.5 dark:border-green-800 dark:bg-green-500/10">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 text-green-600 dark:text-green-400"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+              <span className="text-sm font-medium text-green-800 dark:text-green-300">Ad-free subscriber</span>
+            </div>
+            <button
+              onClick={handleManageSubscription}
+              className="text-xs text-green-600 underline underline-offset-2 transition hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+            >
+              Manage
+            </button>
+          </div>
+        ) : null}
 
         <section className="mt-3 rounded-3xl border border-gray-200/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm dark:border-gray-800 dark:bg-black/30 sm:p-5">
           <div className="flex flex-col gap-3">
@@ -1871,7 +1904,7 @@ export default function Home() {
                         className="mt-1 text-sm font-medium text-blue-600 underline underline-offset-2 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                         type="button"
                       >
-                        Go ad-free for $1.29/month
+                        Subscribe to go ad-free and support this app
                       </button>
                     </div>
                   </section>
@@ -2461,7 +2494,7 @@ export default function Home() {
               onClick={() => setSubscribeOpen(true)}
               className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
             >
-              Remove ads: subscribe from $1.29/month
+              Subscribe to go ad-free and support this app
             </button>
           ) : null}
         </div>
