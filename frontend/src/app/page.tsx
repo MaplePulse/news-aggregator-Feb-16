@@ -58,7 +58,7 @@ type HeadlineLimit = 30 | 50 | 100 | 200;
 
 const FALLBACK_REGION_OPTIONS: RegionOption[] = [
   {
-    key: "mercosur",
+    key: "south-america",
     name: "South America",
     status: "live",
     subdivision_label: "Country",
@@ -83,20 +83,17 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
   },
 ];
 
-const FALLBACK_MERCOSUR_SUBDIVISIONS: SubdivisionOption[] = [
-  { key: "all", code: "ALL", name: "All South America", flag_url: "" },
-  { key: "mp", code: "MP", name: "MercoPress", flag_url: "" },
+const FALLBACK_SOUTH_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
   { key: "uy", code: "UY", name: "Uruguay", flag_url: "https://flagcdn.com/w40/uy.png" },
   { key: "ar", code: "AR", name: "Argentina", flag_url: "https://flagcdn.com/w40/ar.png" },
   { key: "br", code: "BR", name: "Brazil", flag_url: "https://flagcdn.com/w40/br.png" },
   { key: "py", code: "PY", name: "Paraguay", flag_url: "https://flagcdn.com/w40/py.png" },
   { key: "bo", code: "BO", name: "Bolivia", flag_url: "https://flagcdn.com/w40/bo.png" },
-  { key: "cl", code: "CL", name: "Chile (coming soon)", flag_url: "https://flagcdn.com/w40/cl.png" },
-  { key: "co", code: "CO", name: "Colombia (coming soon)", flag_url: "https://flagcdn.com/w40/co.png" },
-  { key: "pe", code: "PE", name: "Peru (coming soon)", flag_url: "https://flagcdn.com/w40/pe.png" },
-  { key: "ec", code: "EC", name: "Ecuador (coming soon)", flag_url: "https://flagcdn.com/w40/ec.png" },
-  { key: "ve", code: "VE", name: "Venezuela (coming soon)", flag_url: "https://flagcdn.com/w40/ve.png" },
-  { key: "sr", code: "SR", name: "Suriname (coming soon)", flag_url: "https://flagcdn.com/w40/sr.png" },
+  { key: "cl", code: "CL", name: "Chile", flag_url: "https://flagcdn.com/w40/cl.png" },
+  { key: "co", code: "CO", name: "Colombia", flag_url: "https://flagcdn.com/w40/co.png" },
+  { key: "pe", code: "PE", name: "Peru", flag_url: "https://flagcdn.com/w40/pe.png" },
+  { key: "ec", code: "EC", name: "Ecuador", flag_url: "https://flagcdn.com/w40/ec.png" },
+  { key: "ve", code: "VE", name: "Venezuela", flag_url: "https://flagcdn.com/w40/ve.png" },
 ];
 
 const HEADLINE_LIMIT_OPTIONS: HeadlineLimit[] = [30, 50, 100, 200];
@@ -145,7 +142,7 @@ const STORAGE_KEYS = {
   customerId: "pulse-news-customer-id",
 } as const;
 
-const DEFAULT_REGION = "mercosur";
+const DEFAULT_REGION = "south-america";
 const DEFAULT_RANGE = "24h";
 const DEFAULT_CATEGORY: CategoryFilter = "all";
 const DEFAULT_HEADLINE_LIMIT: HeadlineLimit = 30;
@@ -423,7 +420,7 @@ function getFallbackRegionOption(key: string) {
 }
 
 function getFallbackSubdivisionsForRegion(regionKey: string): SubdivisionOption[] {
-  if (regionKey === "mercosur") return FALLBACK_MERCOSUR_SUBDIVISIONS;
+  if (regionKey === "south-america" || regionKey === "mercosur") return FALLBACK_SOUTH_AMERICA_SUBDIVISIONS;
   if (regionKey === "mexico") {
     return [
       { key: "all", code: "ALL", name: "All Mexico", flag_url: "" },
@@ -472,13 +469,13 @@ export default function Home() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
 
   const [regionsData, setRegionsData] = useState<RegionOption[]>(FALLBACK_REGION_OPTIONS);
-  const [subdivisionsData, setSubdivisionsData] = useState<SubdivisionOption[]>(FALLBACK_MERCOSUR_SUBDIVISIONS);
+  const [subdivisionsData, setSubdivisionsData] = useState<SubdivisionOption[]>(FALLBACK_SOUTH_AMERICA_SUBDIVISIONS);
 
   const [region, setRegion] = useState<RegionKey>(DEFAULT_REGION);
   const [query, setQuery] = useState("");
   const [range, setRange] = useState(DEFAULT_RANGE);
   const [subdivision, setSubdivision] = useState<SubdivisionKey>(
-    defaultSubdivisionForRegion(DEFAULT_REGION, FALLBACK_REGION_OPTIONS, FALLBACK_MERCOSUR_SUBDIVISIONS)
+    defaultSubdivisionForRegion(DEFAULT_REGION, FALLBACK_REGION_OPTIONS, FALLBACK_SOUTH_AMERICA_SUBDIVISIONS)
   );
   const [category, setCategory] = useState<CategoryFilter>(DEFAULT_CATEGORY);
   const [headlineLimit, setHeadlineLimit] = useState<HeadlineLimit>(DEFAULT_HEADLINE_LIMIT);
@@ -1212,12 +1209,16 @@ export default function Home() {
       const themeRaw = window.localStorage.getItem(STORAGE_KEYS.theme);
       if (themeRaw === "light" || themeRaw === "dark") savedTheme = themeRaw;
 
-      const regionRaw = (window.localStorage.getItem(STORAGE_KEYS.region) || "").trim();
+      let regionRaw = (window.localStorage.getItem(STORAGE_KEYS.region) || "").trim();
+      // Migrate legacy "mercosur" region key to "south-america"
+      if (regionRaw === "mercosur") regionRaw = "south-america";
       if (regionRaw) savedRegion = regionRaw;
 
-      const subdivisionRaw =
+      let subdivisionRaw =
         (window.localStorage.getItem(STORAGE_KEYS.subdivision) || "").trim() ||
         (window.localStorage.getItem(STORAGE_KEYS.country) || "").trim();
+      // Migrate legacy subdivisions removed from South America
+      if (subdivisionRaw === "all" || subdivisionRaw === "mp") subdivisionRaw = "uy";
       if (subdivisionRaw) savedSubdivision = subdivisionRaw;
 
       const rangeRaw = window.localStorage.getItem(STORAGE_KEYS.range);
@@ -1235,10 +1236,12 @@ export default function Home() {
     try {
       const sp = new URLSearchParams(window.location.search);
 
-      const regionParam = (sp.get("region") || "").trim();
+      let regionParam = (sp.get("region") || "").trim();
+      if (regionParam === "mercosur") regionParam = "south-america";
       if (regionParam) savedRegion = regionParam;
 
-      const subdivisionParam = (sp.get("subdivision") || sp.get("country") || "").trim();
+      let subdivisionParam = (sp.get("subdivision") || sp.get("country") || "").trim();
+      if (subdivisionParam === "all" || subdivisionParam === "mp") subdivisionParam = "uy";
       if (subdivisionParam) savedSubdivision = subdivisionParam;
 
       const rangeParam = sp.get("range");
@@ -1546,7 +1549,7 @@ export default function Home() {
     await loadTopStories(region, range, subdivision, nextLimit);
   }
 
-  const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "Mercosur";
+  const selectedRegionName = regionOptionsForUi.find((r) => r.key === region)?.name || "South America";
   const selectedSubdivisionName = subdivisionOptions.find((c) => c.key === subdivision)?.name || "News";
 
   // Show ad/subscribe banners between articles (hidden for subscribers)
