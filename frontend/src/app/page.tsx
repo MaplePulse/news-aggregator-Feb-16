@@ -108,13 +108,13 @@ const FALLBACK_SOUTH_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
 const FALLBACK_EUROPE_SUBDIVISIONS: SubdivisionOption[] = [
   { key: "es", code: "ES", name: "Spain", flag_url: "https://flagcdn.com/w40/es.png" },
   { key: "fr", code: "FR", name: "France", flag_url: "https://flagcdn.com/w40/fr.png" },
-  { key: "it", code: "IT", name: "Italy", flag_url: "https://flagcdn.com/w40/it.png", status: "coming-soon" },
-  { key: "gr", code: "GR", name: "Greece", flag_url: "https://flagcdn.com/w40/gr.png", status: "coming-soon" },
-  { key: "pt", code: "PT", name: "Portugal", flag_url: "https://flagcdn.com/w40/pt.png", status: "coming-soon" },
-  { key: "cy", code: "CY", name: "Cyprus", flag_url: "https://flagcdn.com/w40/cy.png", status: "coming-soon" },
-  { key: "hr", code: "HR", name: "Croatia", flag_url: "https://flagcdn.com/w40/hr.png", status: "coming-soon" },
-  { key: "tr", code: "TR", name: "Turkey", flag_url: "https://flagcdn.com/w40/tr.png", status: "coming-soon" },
-  { key: "mt", code: "MT", name: "Malta", flag_url: "https://flagcdn.com/w40/mt.png", status: "coming-soon" },
+  { key: "it", code: "IT", name: "Italy", flag_url: "https://flagcdn.com/w40/it.png" },
+  { key: "gr", code: "GR", name: "Greece", flag_url: "https://flagcdn.com/w40/gr.png" },
+  { key: "pt", code: "PT", name: "Portugal", flag_url: "https://flagcdn.com/w40/pt.png" },
+  { key: "cy", code: "CY", name: "Cyprus", flag_url: "https://flagcdn.com/w40/cy.png" },
+  { key: "hr", code: "HR", name: "Croatia", flag_url: "https://flagcdn.com/w40/hr.png" },
+  { key: "tr", code: "TR", name: "Turkey", flag_url: "https://flagcdn.com/w40/tr.png" },
+  { key: "mt", code: "MT", name: "Malta", flag_url: "https://flagcdn.com/w40/mt.png" },
 ];
 
 const HEADLINE_LIMIT_OPTIONS: HeadlineLimit[] = [30, 50, 100, 200];
