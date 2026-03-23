@@ -90,14 +90,6 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
     default_subdivision: "all",
     default_country: "all",
   },
-  {
-    key: "europe",
-    name: "Europe",
-    status: "coming-soon",
-    subdivision_label: "Country",
-    default_subdivision: "all",
-    default_country: "all",
-  },
 ];
 
 const FALLBACK_SOUTH_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
