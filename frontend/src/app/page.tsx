@@ -81,6 +81,14 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
     default_subdivision: "all",
     default_country: "all",
   },
+  {
+    key: "europe",
+    name: "Europe",
+    status: "coming-soon",
+    subdivision_label: "Country",
+    default_subdivision: "all",
+    default_country: "all",
+  },
 ];
 
 const FALLBACK_SOUTH_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
@@ -1674,7 +1682,7 @@ export default function Home() {
               <h2 className="text-base font-semibold text-gray-950 dark:text-white sm:text-lg">Choose your region</h2>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="grid grid-cols-4 gap-2 sm:gap-3">
               {regionOptionsForUi.map((regionOption) => {
                 const isSelected = regionOption.key === region;
                 const isLive = regionOption.status === "live";
@@ -1692,11 +1700,13 @@ export default function Home() {
                   >
                     <div className="flex min-h-[52px] flex-col items-center justify-center gap-1.5 sm:min-h-[56px]">
                       <span
-                        className={`block text-center text-[13px] font-semibold tracking-tight sm:text-[15px] ${
-                          regionOption.key === "central-america" ? "leading-tight" : "truncate"
-                        } text-gray-950 dark:text-white`}
+                        className="block text-center text-[12px] font-semibold leading-tight tracking-tight text-gray-950 dark:text-white sm:text-[14px]"
                       >
-                        {regionOption.name}
+                        {regionOption.name.includes(" ")
+                          ? regionOption.name.split(" ").map((word, i, arr) => (
+                              <span key={i}>{word}{i < arr.length - 1 ? <br /> : null}</span>
+                            ))
+                          : regionOption.name}
                       </span>
 
                       <span
