@@ -2095,16 +2095,17 @@ export default function Home() {
                     {subdivisionOptions.filter((c) => c.status !== "coming-soon").map((c) => (
                       <option key={c.key} value={c.key}>{c.name}</option>
                     ))}
-                    {subdivisionOptions.some((c) => c.status === "coming-soon") && (
-                      <optgroup label="Coming Soon">
-                        {subdivisionOptions.filter((c) => c.status === "coming-soon").map((c) => (
-                          <option key={c.key} value={c.key} disabled style={{ color: "#666" }}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
                   </select>
+                  {subdivisionOptions.some((c) => c.status === "coming-soon") && (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                      {subdivisionOptions.filter((c) => c.status === "coming-soon").map((c) => (
+                        <span key={c.key} className="text-xs text-gray-400 dark:text-gray-500">
+                          {c.flag_url && <img src={c.flag_url} alt="" className="mr-1 inline h-3 w-4 rounded-sm opacity-40" />}
+                          {c.name} <span className="italic">coming soon</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
