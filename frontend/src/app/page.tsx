@@ -40,6 +40,7 @@ type SubdivisionOption = {
   name: string;
   flag_url: string;
   source_count?: number;
+  status?: "live" | "coming-soon";
 };
 
 type RegionOption = {
@@ -84,10 +85,10 @@ const FALLBACK_REGION_OPTIONS: RegionOption[] = [
   {
     key: "europe",
     name: "Europe",
-    status: "coming-soon",
+    status: "live",
     subdivision_label: "Country",
-    default_subdivision: "all",
-    default_country: "all",
+    default_subdivision: "es",
+    default_country: "es",
   },
 ];
 
@@ -102,6 +103,18 @@ const FALLBACK_SOUTH_AMERICA_SUBDIVISIONS: SubdivisionOption[] = [
   { key: "pe", code: "PE", name: "Peru", flag_url: "https://flagcdn.com/w40/pe.png" },
   { key: "ec", code: "EC", name: "Ecuador", flag_url: "https://flagcdn.com/w40/ec.png" },
   { key: "ve", code: "VE", name: "Venezuela", flag_url: "https://flagcdn.com/w40/ve.png" },
+];
+
+const FALLBACK_EUROPE_SUBDIVISIONS: SubdivisionOption[] = [
+  { key: "es", code: "ES", name: "Spain", flag_url: "https://flagcdn.com/w40/es.png" },
+  { key: "fr", code: "FR", name: "France", flag_url: "https://flagcdn.com/w40/fr.png" },
+  { key: "it", code: "IT", name: "Italy", flag_url: "https://flagcdn.com/w40/it.png", status: "coming-soon" },
+  { key: "gr", code: "GR", name: "Greece", flag_url: "https://flagcdn.com/w40/gr.png", status: "coming-soon" },
+  { key: "pt", code: "PT", name: "Portugal", flag_url: "https://flagcdn.com/w40/pt.png", status: "coming-soon" },
+  { key: "cy", code: "CY", name: "Cyprus", flag_url: "https://flagcdn.com/w40/cy.png", status: "coming-soon" },
+  { key: "hr", code: "HR", name: "Croatia", flag_url: "https://flagcdn.com/w40/hr.png", status: "coming-soon" },
+  { key: "tr", code: "TR", name: "Turkey", flag_url: "https://flagcdn.com/w40/tr.png", status: "coming-soon" },
+  { key: "mt", code: "MT", name: "Malta", flag_url: "https://flagcdn.com/w40/mt.png", status: "coming-soon" },
 ];
 
 const HEADLINE_LIMIT_OPTIONS: HeadlineLimit[] = [30, 50, 100, 200];
@@ -440,6 +453,7 @@ function getFallbackSubdivisionsForRegion(regionKey: string): SubdivisionOption[
       { key: "yucatan", code: "YUC", name: "Yucatán", flag_url: "" },
     ];
   }
+  if (regionKey === "europe") return FALLBACK_EUROPE_SUBDIVISIONS;
   return [];
 }
 
@@ -2075,11 +2089,14 @@ export default function Home() {
                     onChange={(e) => void handleSubdivisionChange(e.target.value)}
                     className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-black shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                   >
-                    {subdivisionOptions.map((c) => (
-                      <option key={c.key} value={c.key} disabled={c.name.includes("(coming soon)")}>
-                        {c.name}
-                      </option>
-                    ))}
+                    {subdivisionOptions.map((c) => {
+                      const isComingSoon = c.status === "coming-soon";
+                      return (
+                        <option key={c.key} value={c.key} disabled={isComingSoon}>
+                          {c.name}{isComingSoon ? " (coming soon)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
