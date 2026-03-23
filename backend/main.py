@@ -48,22 +48,25 @@ app.add_middleware(
 #   "country" remains accepted for Mercosur and existing frontend calls.
 # ----------------------------
 REGIONS: Dict[str, Dict[str, Any]] = {
-    "mercosur": {
-        "key": "mercosur",
-        "name": "Mercosur",
+    "south-america": {
+        "key": "south-america",
+        "name": "South America",
         "status": "live",
         "subdivision_label": "Country",
         "default_subdivision": "uy",
-        "default_country": "uy",  # backward compatibility
-        "aliases": ["mercosur"],
+        "default_country": "uy",
+        "aliases": ["south-america", "south_america", "southamerica", "mercosur"],
         "subdivisions": {
-            "all": {"code": "ALL", "name": "All Mercosur", "flag_url": ""},
-            "mp": {"code": "MP", "name": "MercoPress", "flag_url": ""},
             "uy": {"code": "UY", "name": "Uruguay", "flag_url": "https://flagcdn.com/w40/uy.png"},
             "ar": {"code": "AR", "name": "Argentina", "flag_url": "https://flagcdn.com/w40/ar.png"},
             "br": {"code": "BR", "name": "Brazil", "flag_url": "https://flagcdn.com/w40/br.png"},
             "py": {"code": "PY", "name": "Paraguay", "flag_url": "https://flagcdn.com/w40/py.png"},
             "bo": {"code": "BO", "name": "Bolivia", "flag_url": "https://flagcdn.com/w40/bo.png"},
+            "cl": {"code": "CL", "name": "Chile", "flag_url": "https://flagcdn.com/w40/cl.png"},
+            "co": {"code": "CO", "name": "Colombia", "flag_url": "https://flagcdn.com/w40/co.png"},
+            "pe": {"code": "PE", "name": "Peru", "flag_url": "https://flagcdn.com/w40/pe.png"},
+            "ec": {"code": "EC", "name": "Ecuador", "flag_url": "https://flagcdn.com/w40/ec.png"},
+            "ve": {"code": "VE", "name": "Venezuela", "flag_url": "https://flagcdn.com/w40/ve.png"},
         },
     },
     "mexico": {
@@ -104,14 +107,14 @@ REGIONS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Mercosur bloc (requested): UY, AR, BR, PY, BO + MercoPress ("mp") + "all"
+# South America: UY, AR, BR, PY, BO, CL, CO, PE, EC, VE
 # Keep SOURCES as the master feed list. Additional regions can be appended here later.
 SOURCES: List[Dict[str, Any]] = [
     # --- Uruguay (UY) ---
     {
         "id": "montevideo_portal",
         "name": "Montevideo Portal",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "uy",
         "country_key": "uy",  # backward compatibility
         "subdivision_code": "UY",
@@ -124,7 +127,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "el_observador_uy",
         "name": "El Observador (UY)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "uy",
         "country_key": "uy",
         "subdivision_code": "UY",
@@ -138,7 +141,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "lanacion_ar",
         "name": "La Nación (AR)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "ar",
         "country_key": "ar",
         "subdivision_code": "AR",
@@ -151,7 +154,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "clarin_ar_lo_ultimo",
         "name": "Clarín (AR) - Lo Último",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "ar",
         "country_key": "ar",
         "subdivision_code": "AR",
@@ -165,7 +168,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "g1_br",
         "name": "G1 (BR)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "br",
         "country_key": "br",
         "subdivision_code": "BR",
@@ -178,7 +181,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "uol_br",
         "name": "UOL (BR)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "br",
         "country_key": "br",
         "subdivision_code": "BR",
@@ -192,7 +195,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "abccolor_py",
         "name": "ABC Color (PY)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "py",
         "country_key": "py",
         "subdivision_code": "PY",
@@ -206,7 +209,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "radiofides_bo",
         "name": "Radio Fides (BO)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "bo",
         "country_key": "bo",
         "subdivision_code": "BO",
@@ -219,7 +222,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "radiofides_bo_nacional",
         "name": "Radio Fides - Nacional (BO)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "bo",
         "country_key": "bo",
         "subdivision_code": "BO",
@@ -232,7 +235,7 @@ SOURCES: List[Dict[str, Any]] = [
     {
         "id": "lapatria_bo",
         "name": "La Patria (BO)",
-        "region_key": "mercosur",
+        "region_key": "south-america",
         "subdivision_key": "bo",
         "country_key": "bo",
         "subdivision_code": "BO",
@@ -242,19 +245,205 @@ SOURCES: List[Dict[str, Any]] = [
         "source_logo": "https://lapatria.bo/favicon.ico",
         "feed_url": "https://lapatria.bo/feed/",
     },
-    # --- MercoPress ---
+    # --- Chile (CL) ---
     {
-        "id": "mercopress_mercosur",
-        "name": "MercoPress (Mercosur)",
-        "region_key": "mercosur",
-        "subdivision_key": "mp",
-        "country_key": "mp",
-        "subdivision_code": "MP",
-        "country_code": "MP",
-        "subdivision_flag_url": None,
-        "country_flag_url": None,
-        "source_logo": "https://en.mercopress.com/favicon.ico",
-        "feed_url": "https://en.mercopress.com/rss/mercosur",
+        "id": "la_tercera_cl",
+        "name": "La Tercera (CL)",
+        "region_key": "south-america",
+        "subdivision_key": "cl",
+        "country_key": "cl",
+        "subdivision_code": "CL",
+        "country_code": "CL",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cl.png",
+        "country_flag_url": "https://flagcdn.com/w40/cl.png",
+        "source_logo": "https://www.latercera.com/favicon.ico",
+        "feed_url": "https://www.latercera.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "la_tercera_cl_nacional",
+        "name": "La Tercera - Nacional (CL)",
+        "region_key": "south-america",
+        "subdivision_key": "cl",
+        "country_key": "cl",
+        "subdivision_code": "CL",
+        "country_code": "CL",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cl.png",
+        "country_flag_url": "https://flagcdn.com/w40/cl.png",
+        "source_logo": "https://www.latercera.com/favicon.ico",
+        "feed_url": "https://www.latercera.com/arc/outboundfeeds/rss/category/nacional/?outputType=xml",
+    },
+    {
+        "id": "el_desconcierto_cl",
+        "name": "El Desconcierto (CL)",
+        "region_key": "south-america",
+        "subdivision_key": "cl",
+        "country_key": "cl",
+        "subdivision_code": "CL",
+        "country_code": "CL",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cl.png",
+        "country_flag_url": "https://flagcdn.com/w40/cl.png",
+        "source_logo": "https://eldesconcierto.cl/favicon.ico",
+        "feed_url": "https://eldesconcierto.cl/feeds/rss.xml",
+    },
+    {
+        "id": "ciper_cl",
+        "name": "CIPER Chile",
+        "region_key": "south-america",
+        "subdivision_key": "cl",
+        "country_key": "cl",
+        "subdivision_code": "CL",
+        "country_code": "CL",
+        "subdivision_flag_url": "https://flagcdn.com/w40/cl.png",
+        "country_flag_url": "https://flagcdn.com/w40/cl.png",
+        "source_logo": "https://www.ciperchile.cl/favicon.ico",
+        "feed_url": "https://www.ciperchile.cl/feed/",
+    },
+    # --- Colombia (CO) ---
+    {
+        "id": "el_espectador_co",
+        "name": "El Espectador (CO)",
+        "region_key": "south-america",
+        "subdivision_key": "co",
+        "country_key": "co",
+        "subdivision_code": "CO",
+        "country_code": "CO",
+        "subdivision_flag_url": "https://flagcdn.com/w40/co.png",
+        "country_flag_url": "https://flagcdn.com/w40/co.png",
+        "source_logo": "https://www.elespectador.com/favicon.ico",
+        "feed_url": "https://www.elespectador.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "semana_co",
+        "name": "Semana (CO)",
+        "region_key": "south-america",
+        "subdivision_key": "co",
+        "country_key": "co",
+        "subdivision_code": "CO",
+        "country_code": "CO",
+        "subdivision_flag_url": "https://flagcdn.com/w40/co.png",
+        "country_flag_url": "https://flagcdn.com/w40/co.png",
+        "source_logo": "https://www.semana.com/favicon.ico",
+        "feed_url": "https://www.semana.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    # --- Peru (PE) ---
+    {
+        "id": "rpp_pe",
+        "name": "RPP Noticias (PE)",
+        "region_key": "south-america",
+        "subdivision_key": "pe",
+        "country_key": "pe",
+        "subdivision_code": "PE",
+        "country_code": "PE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/pe.png",
+        "country_flag_url": "https://flagcdn.com/w40/pe.png",
+        "source_logo": "https://rpp.pe/favicon.ico",
+        "feed_url": "https://rpp.pe/feed",
+    },
+    {
+        "id": "el_comercio_pe",
+        "name": "El Comercio (PE)",
+        "region_key": "south-america",
+        "subdivision_key": "pe",
+        "country_key": "pe",
+        "subdivision_code": "PE",
+        "country_code": "PE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/pe.png",
+        "country_flag_url": "https://flagcdn.com/w40/pe.png",
+        "source_logo": "https://elcomercio.pe/favicon.ico",
+        "feed_url": "https://elcomercio.pe/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "gestion_pe",
+        "name": "Gestión (PE)",
+        "region_key": "south-america",
+        "subdivision_key": "pe",
+        "country_key": "pe",
+        "subdivision_code": "PE",
+        "country_code": "PE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/pe.png",
+        "country_flag_url": "https://flagcdn.com/w40/pe.png",
+        "source_logo": "https://gestion.pe/favicon.ico",
+        "feed_url": "https://gestion.pe/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "andina_pe",
+        "name": "Andina (PE)",
+        "region_key": "south-america",
+        "subdivision_key": "pe",
+        "country_key": "pe",
+        "subdivision_code": "PE",
+        "country_code": "PE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/pe.png",
+        "country_flag_url": "https://flagcdn.com/w40/pe.png",
+        "source_logo": "https://andina.pe/favicon.ico",
+        "feed_url": "https://andina.pe/agencia/feed.aspx",
+    },
+    # --- Ecuador (EC) ---
+    {
+        "id": "el_universo_ec",
+        "name": "El Universo (EC)",
+        "region_key": "south-america",
+        "subdivision_key": "ec",
+        "country_key": "ec",
+        "subdivision_code": "EC",
+        "country_code": "EC",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ec.png",
+        "country_flag_url": "https://flagcdn.com/w40/ec.png",
+        "source_logo": "https://www.eluniverso.com/favicon.ico",
+        "feed_url": "https://www.eluniverso.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "id": "el_comercio_ec",
+        "name": "El Comercio (EC)",
+        "region_key": "south-america",
+        "subdivision_key": "ec",
+        "country_key": "ec",
+        "subdivision_code": "EC",
+        "country_code": "EC",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ec.png",
+        "country_flag_url": "https://flagcdn.com/w40/ec.png",
+        "source_logo": "https://www.elcomercio.com/favicon.ico",
+        "feed_url": "https://www.elcomercio.com/feed/",
+    },
+    # --- Venezuela (VE) ---
+    {
+        "id": "el_nacional_ve",
+        "name": "El Nacional (VE)",
+        "region_key": "south-america",
+        "subdivision_key": "ve",
+        "country_key": "ve",
+        "subdivision_code": "VE",
+        "country_code": "VE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ve.png",
+        "country_flag_url": "https://flagcdn.com/w40/ve.png",
+        "source_logo": "https://www.elnacional.com/favicon.ico",
+        "feed_url": "https://www.elnacional.com/feed/",
+    },
+    {
+        "id": "runrunes_ve",
+        "name": "Runrun.es (VE)",
+        "region_key": "south-america",
+        "subdivision_key": "ve",
+        "country_key": "ve",
+        "subdivision_code": "VE",
+        "country_code": "VE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ve.png",
+        "country_flag_url": "https://flagcdn.com/w40/ve.png",
+        "source_logo": "https://runrun.es/favicon.ico",
+        "feed_url": "https://runrun.es/feed/",
+    },
+    {
+        "id": "ultimas_noticias_ve",
+        "name": "Últimas Noticias (VE)",
+        "region_key": "south-america",
+        "subdivision_key": "ve",
+        "country_key": "ve",
+        "subdivision_code": "VE",
+        "country_code": "VE",
+        "subdivision_flag_url": "https://flagcdn.com/w40/ve.png",
+        "country_flag_url": "https://flagcdn.com/w40/ve.png",
+        "source_logo": "https://ultimasnoticias.com.ve/favicon.ico",
+        "feed_url": "https://ultimasnoticias.com.ve/feed/",
     },
 
     # --- Mexico (MX) - cleaned live launch feeds only ---
@@ -735,7 +924,7 @@ SOURCES: List[Dict[str, Any]] = [
     },
 ]
 
-DEFAULT_REGION_KEY = "mercosur"
+DEFAULT_REGION_KEY = "south-america"
 LIVE_REGION_KEYS = {k for k, v in REGIONS.items() if v.get("status") == "live"}
 
 REGION_ALIASES: Dict[str, str] = {}
@@ -3065,7 +3254,7 @@ def debug_sources(region: Optional[str] = None):
 
 @app.get("/uy-news")
 def get_uruguay_news(range: str = "24h", q: str = "", limit: int = 50):
-    return get_news(region="mercosur", subdivision="uy", range=range, q=q, limit=limit)
+    return get_news(region="south-america", subdivision="uy", range=range, q=q, limit=limit)
 
 
 def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: int = 999999) -> List[Dict[str, Any]]:
@@ -3080,14 +3269,7 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
     for source in _sources_for_region(r):
         source_subdivision_key = (source.get("subdivision_key") or source.get("country_key") or "").lower()
 
-        if r == "mercosur":
-            if s_key == "all":
-                if source_subdivision_key not in {"uy", "ar", "br", "py", "bo", "mp"}:
-                    continue
-            else:
-                if source_subdivision_key != s_key:
-                    continue
-        elif r == "mexico":
+        if r == "mexico":
             if s_key == "all":
                 pass  # include all Mexico feeds regardless of subdivision
             else:
@@ -3151,10 +3333,6 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
 
 
 def _hard_cap_limit(region_key: str, subdivision_key: str, lim: int) -> int:
-    r = (region_key or "").strip().lower()
-    s = (subdivision_key or "").strip().lower()
-    if r == "mercosur" and s == "all":
-        return max(1, min(lim, 200))
     return max(1, min(lim, 200))
 
 
@@ -3652,7 +3830,7 @@ def _worker_loop() -> None:
 
     subdivisions = _env_list("PRE_ENRICH_SUBDIVISIONS", "")
     if not subdivisions:
-        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,mp,all,cdmx,jalisco,nuevo-leon,edomex,yucatan,gt,cr,sv,hn,ni,pa,bz")
+        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,cl,co,pe,ec,ve,cdmx,jalisco,nuevo-leon,edomex,yucatan,gt,cr,sv,hn,ni,pa,bz")
     if not subdivisions:
         subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all", "cdmx"]
 
@@ -3707,9 +3885,7 @@ def _worker_loop() -> None:
                 if region_key not in LIVE_REGION_KEYS:
                     continue
 
-                region_subdivisions = subdivisions
-                if region_key != "mercosur":
-                    region_subdivisions = [k for k in subdivisions if k in _valid_subdivision_keys_for_region(region_key)]
+                region_subdivisions = [k for k in subdivisions if k in _valid_subdivision_keys_for_region(region_key)]
 
                 for subdivision_key in region_subdivisions:
                     if subdivision_key not in _valid_subdivision_keys_for_region(region_key):
@@ -3723,8 +3899,6 @@ def _worker_loop() -> None:
                         bucket_enriched = 0
 
                         effective_scan_limit = int(scan_limit)
-                        if region_key == "mercosur" and (subdivision_key or "").lower() == "all":
-                            effective_scan_limit = min(effective_scan_limit, 60)
 
                         scan_cap = max(150, int(effective_scan_limit) * 10)
                         items = _collect_items(region=region_key, subdivision=subdivision_key, range=r, q="", scan_cap=scan_cap)
