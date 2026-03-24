@@ -3782,6 +3782,9 @@ def get_subdivisions(region: str = DEFAULT_REGION_KEY):
             entry["status"] = info["status"]
         subdivisions.append(entry)
 
+    # Sort subdivisions alphabetically by name ("All …" entries stay at top)
+    subdivisions.sort(key=lambda s: ("" if s["name"].startswith("All ") else s["name"]))
+
     return {
         "region": r,
         "subdivision_label": _region_subdivision_label(r),
