@@ -41,5 +41,29 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.5,
     },
+    {
+      url: `${base}/regions/south-america`,
+      lastModified: "2026-03-24",
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${base}/regions/mexico`,
+      lastModified: "2026-03-24",
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${base}/regions/central-america`,
+      lastModified: "2026-03-24",
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${base}/regions/europe`,
+      lastModified: "2026-03-24",
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
   ];
 }
