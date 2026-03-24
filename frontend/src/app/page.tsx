@@ -781,6 +781,12 @@ export default function Home() {
     window.open(`https://translate.google.com/translate?sl=auto&tl=en&u=${encoded}`, "_blank");
   }
 
+  function articleUrl(cluster: Cluster): string {
+    const title = cluster.best_item.title_en || cluster.best_item.title || "";
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    return `/article/${encodeURIComponent(region)}/${encodeURIComponent(cluster.cluster_id)}/${slug}`;
+  }
+
   function performSearchAction() {
     try {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2013,9 +2019,11 @@ export default function Home() {
 
                   {translatedReady ? (
                     <>
-                      <h3 className={`font-semibold leading-snug tracking-tight text-gray-950 dark:text-white ${
-                        isFeatured ? "text-2xl sm:text-[1.7rem]" : "text-xl"
-                      }`}>{a.title_en}</h3>
+                      <a href={articleUrl(c)} className="block group/title">
+                        <h3 className={`font-semibold leading-snug tracking-tight text-gray-950 group-hover/title:text-blue-600 dark:text-white dark:group-hover/title:text-blue-400 transition-colors ${
+                          isFeatured ? "text-2xl sm:text-[1.7rem]" : "text-xl"
+                        }`}>{a.title_en}</h3>
+                      </a>
                       <p className={`mt-3 leading-7 text-gray-800 dark:text-white/80 ${
                         isFeatured ? "text-base" : "text-[15px]"
                       }`}>{a.summary_en}</p>
