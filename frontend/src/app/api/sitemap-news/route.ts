@@ -7,7 +7,8 @@ import { NextResponse } from "next/server";
  * across all live regions. Google News sitemaps should only include
  * articles published within the last 48 hours.
  *
- * Fetches all regions in parallel to stay within Vercel's 10s function timeout.
+ * Calls our own /api/top route so env routing (production vs staging backend)
+ * is handled consistently. All regions fetched in parallel.
  * URL: /api/sitemap-news
  */
 
@@ -18,7 +19,6 @@ const FETCH_TIMEOUT_MS = 8000;
 type BackendItem = {
   title: string;
   link: string;
-  source: string;
   published_utc?: string;
   title_en?: string | null;
 };
@@ -37,12 +37,13 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-async function fetchRegion(backend: string, region: string): Promise<BackendCluster[]> {
+async function fetchRegion(region: string, host: string): Promise<BackendCluster[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
+    // Call our own /api/top so BACKEND_URL routing is handled by the existing route
     const res = await fetch(
-      `${backend}/top?region=${region}&range=24h&limit=50`,
+      `${host}/api/top?region=${region}&range=24h&limit=50`,
       { cache: "no-store", signal: controller.signal }
     );
     if (!res.ok) return [];
@@ -55,11 +56,13 @@ async function fetchRegion(backend: string, region: string): Promise<BackendClus
   }
 }
 
-export async function GET() {
-  const backend = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+export async function GET(request: Request) {
+  // Derive host from the incoming request so this works on any deployment URL
+  const requestUrl = new URL(request.url);
+  const host = `${requestUrl.protocol}//${requestUrl.host}`;
 
   // Fetch all regions in parallel
-  const results = await Promise.all(REGIONS.map((r) => fetchRegion(backend, r)));
+  const results = await Promise.all(REGIONS.map((r) => fetchRegion(r, host)));
 
   const seen = new Set<string>();
   const entries: string[] = [];
