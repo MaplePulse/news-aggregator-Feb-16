@@ -143,7 +143,7 @@ export default async function RegionPage({ params }: PageProps) {
         name: `Is Regional Pulse News free?`,
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes, Regional Pulse News is free to use. We offer an optional subscription ($1.29/month or $11.99/year) to remove ads and support the service.",
+          text: "Yes, Regional Pulse News is free to use. We offer an optional subscription ($1.99/month or $11.99/year) to remove ads and support the service.",
         },
       },
     ],
@@ -222,7 +222,7 @@ export default async function RegionPage({ params }: PageProps) {
                 Is it free?
               </dt>
               <dd className="mt-1 text-gray-600 dark:text-gray-400">
-                Yes. The core service is completely free. An optional subscription ($1.29/month or
+                Yes. The core service is completely free. An optional subscription ($1.99/month or
                 $11.99/year) removes ads and supports continued development.
               </dd>
             </div>
