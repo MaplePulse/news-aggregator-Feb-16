@@ -115,6 +115,15 @@ export default function AboutPage() {
           .
         </p>
 
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Privacy</h2>
+        <p>
+          For information about how we handle your data, see our{" "}
+          <Link href="/privacy" className="text-blue-600 underline dark:text-blue-400">
+            privacy policy
+          </Link>
+          .
+        </p>
+
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Copyright and fair use</h2>
         <p>
           Regional Pulse News respects the intellectual property of all source publishers. We
