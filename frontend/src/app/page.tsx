@@ -2601,6 +2601,18 @@ export default function Home() {
           ) : null}
         </div>
         ) : null}
+
+        {/* Site footer */}
+        <footer className="mt-8 border-t border-gray-200 py-6 text-center text-xs text-gray-400 dark:border-gray-800 dark:text-gray-500">
+          <div className="flex items-center justify-center gap-4">
+            <a href="/about" className="hover:text-gray-600 dark:hover:text-gray-300">About</a>
+            <span>·</span>
+            <a href="/privacy" className="hover:text-gray-600 dark:hover:text-gray-300">Privacy Policy</a>
+            <span>·</span>
+            <a href="mailto:hello@regionalpulsenews.com" className="hover:text-gray-600 dark:hover:text-gray-300">Contact</a>
+          </div>
+          <p className="mt-2">© {new Date().getFullYear()} Regional Pulse News</p>
+        </footer>
       </main>
 
       {showStartupSplash ? (
