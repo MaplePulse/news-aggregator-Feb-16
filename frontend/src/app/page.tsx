@@ -781,6 +781,12 @@ export default function Home() {
     window.open(`https://translate.google.com/translate?sl=auto&tl=en&u=${encoded}`, "_blank");
   }
 
+  function articleUrl(cluster: Cluster): string {
+    const title = cluster.best_item.title_en || cluster.best_item.title || "";
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    return `/article/${encodeURIComponent(region)}/${encodeURIComponent(cluster.cluster_id)}/${slug}`;
+  }
+
   function performSearchAction() {
     try {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1961,7 +1967,7 @@ export default function Home() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition group-hover:bg-blue-700">
-                          Subscribe from $1.29/mo
+                          Subscribe from $1.99/mo
                         </span>
                       </div>
                     </div>
@@ -2013,9 +2019,11 @@ export default function Home() {
 
                   {translatedReady ? (
                     <>
-                      <h3 className={`font-semibold leading-snug tracking-tight text-gray-950 dark:text-white ${
-                        isFeatured ? "text-2xl sm:text-[1.7rem]" : "text-xl"
-                      }`}>{a.title_en}</h3>
+                      <a href={articleUrl(c)} className="block group/title">
+                        <h3 className={`font-semibold leading-snug tracking-tight text-gray-950 group-hover/title:text-blue-600 dark:text-white dark:group-hover/title:text-blue-400 transition-colors ${
+                          isFeatured ? "text-2xl sm:text-[1.7rem]" : "text-xl"
+                        }`}>{a.title_en}</h3>
+                      </a>
                       <p className={`mt-3 leading-7 text-gray-800 dark:text-white/80 ${
                         isFeatured ? "text-base" : "text-[15px]"
                       }`}>{a.summary_en}</p>
@@ -2414,7 +2422,7 @@ export default function Home() {
                   disabled={subscribing}
                   className="flex flex-col items-center gap-1 rounded-2xl border-2 border-gray-200 bg-white p-5 text-center shadow-sm transition hover:border-blue-400 hover:shadow-md dark:border-gray-700 dark:bg-white/[0.03] dark:hover:border-blue-500"
                 >
-                  <span className="text-2xl font-bold text-gray-950 dark:text-white">$1.29</span>
+                  <span className="text-2xl font-bold text-gray-950 dark:text-white">$1.99</span>
                   <span className="text-sm text-gray-600 dark:text-gray-400">per month</span>
                 </button>
 
@@ -2424,11 +2432,11 @@ export default function Home() {
                   className="relative flex flex-col items-center gap-1 rounded-2xl border-2 border-blue-500 bg-blue-50 p-5 text-center shadow-sm transition hover:shadow-md dark:border-blue-400 dark:bg-blue-500/10"
                 >
                   <span className="absolute -top-2.5 rounded-full bg-blue-500 px-2.5 py-0.5 text-[11px] font-semibold text-white">
-                    Save 23%
+                    Save 50%
                   </span>
                   <span className="text-2xl font-bold text-gray-950 dark:text-white">$11.99</span>
                   <span className="text-sm text-gray-600 dark:text-gray-400">per year</span>
-                  <span className="mt-0.5 text-xs text-blue-600 dark:text-blue-400">$1.00/month</span>
+                  <span className="mt-0.5 text-xs text-blue-600 dark:text-blue-400">Just $1.00/month</span>
                 </button>
               </div>
 
@@ -2556,6 +2564,11 @@ export default function Home() {
                   <div className="font-semibold text-gray-900 dark:text-white">Why it exists</div>
                   <p className="mt-2 text-gray-600 dark:text-gray-400">
                     Regional news matters, but most of it never gets translated. This app fixes that: one feed, multiple countries, everything in English. No accounts, no paywalls, no clutter.
+                  </p>
+                  <p className="mt-2">
+                    <a href="/about" className="text-sm text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                      Read more about Regional Pulse News →
+                    </a>
                   </p>
                 </div>
               </div>
