@@ -1978,7 +1978,7 @@ export default function Home() {
                         <img src={BRAND_LOGO_PATH} alt="" className="h-10 w-10 rounded-xl shadow-sm" />
                         <div className="text-left">
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">Love Regional Pulse News?</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Subscribe to go ad-free and support this app</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Go ad-free, get a personal RSS feed, and support this app</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -2418,9 +2418,9 @@ export default function Home() {
             <div className="relative w-[calc(100vw-2rem)] max-w-md rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h3 className="text-xl font-semibold tracking-tight">Go Ad-Free</h3>
+                  <h3 className="text-xl font-semibold tracking-tight">Subscribe</h3>
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    Support Regional Pulse News and enjoy a cleaner reading experience.
+                    Support Regional Pulse News and unlock subscriber perks.
                   </p>
                 </div>
                 <button
@@ -2431,6 +2431,21 @@ export default function Home() {
                   Close
                 </button>
               </div>
+
+              <ul className="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <li className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 shrink-0 text-green-500"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+                  Ad-free reading experience
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 shrink-0 text-green-500"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+                  Personal RSS feed for your favourite reader app
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-4 w-4 shrink-0 text-green-500"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
+                  Support independent regional journalism
+                </li>
+              </ul>
 
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
@@ -2612,7 +2627,7 @@ export default function Home() {
               onClick={() => setSubscribeOpen(true)}
               className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
             >
-              Subscribe to go ad-free and support this app
+              Subscribe for ad-free reading, RSS feed, and more
             </button>
           ) : null}
         </div>
