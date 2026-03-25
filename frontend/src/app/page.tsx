@@ -1709,12 +1709,28 @@ export default function Home() {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 text-green-600 dark:text-green-400"><path fillRule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm3.844-8.791a.75.75 0 00-1.188-.918l-3.7 4.79-1.649-1.833a.75.75 0 10-1.114 1.004l2.25 2.5a.75.75 0 001.152-.043l4.25-5.5z" clipRule="evenodd" /></svg>
               <span className="text-xs font-medium text-green-800 dark:text-green-300">Ad-free subscriber</span>
             </div>
-            <button
-              onClick={handleManageSubscription}
-              className="text-xs text-green-600 underline underline-offset-2 transition hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-            >
-              Manage
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  if (!customerId) return;
+                  const url = `${window.location.origin}/api/rss?token=${customerId}`;
+                  navigator.clipboard.writeText(url).then(() => {
+                    alert("RSS feed URL copied! Paste it into your favourite reader app (Feedly, Flipboard, etc).");
+                  }).catch(() => {
+                    prompt("Copy your RSS feed URL:", url);
+                  });
+                }}
+                className="text-xs text-orange-600 underline underline-offset-2 transition hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+              >
+                RSS Feed
+              </button>
+              <button
+                onClick={handleManageSubscription}
+                className="text-xs text-green-600 underline underline-offset-2 transition hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              >
+                Manage
+              </button>
+            </div>
           </div>
         ) : null}
 
