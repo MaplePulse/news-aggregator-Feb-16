@@ -169,7 +169,7 @@ SOURCES: List[Dict[str, Any]] = [
         "subdivision_flag_url": "https://flagcdn.com/w40/uy.png",
         "country_flag_url": "https://flagcdn.com/w40/uy.png",
         "source_logo": "https://www.elpais.com.uy/favicon.ico",
-        "feed_url": "https://www.elpais.com.uy/rss",
+        "feed_url": "https://www.elpais.com.uy/rss/latest",
     },
     # --- Argentina (AR) ---
     {
