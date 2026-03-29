@@ -1982,19 +1982,15 @@ export default function Home() {
                     className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                     type="button"
                   >
-                    <div className="flex flex-col items-center gap-4 py-3">
-                      <div className="flex items-center gap-4">
-                        <img src={BRAND_LOGO_PATH} alt="" className="h-14 w-14 rounded-xl shadow-sm" />
-                        <div className="text-left">
-                          <p className="text-base font-bold text-gray-900 dark:text-white">Support Regional Pulse News</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
-                        </div>
+                    <div className="flex flex-col items-center gap-5 py-5 px-2">
+                      <img src={BRAND_LOGO_PATH} alt="" className="h-20 w-20 rounded-2xl shadow-md" />
+                      <div className="text-center">
+                        <p className="text-xl font-extrabold text-gray-900 dark:text-white">Support Regional Pulse News</p>
+                        <p className="mt-1.5 text-base text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition group-hover:bg-blue-700">
-                          Subscribe now
-                        </span>
-                      </div>
+                      <span className="inline-flex items-center rounded-full bg-blue-600 px-7 py-2.5 text-base font-bold text-white shadow-md transition group-hover:bg-blue-700">
+                        Subscribe now
+                      </span>
                     </div>
                   </button>
                 ) : null}
