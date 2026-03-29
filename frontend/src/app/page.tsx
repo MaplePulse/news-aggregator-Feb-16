@@ -1986,8 +1986,8 @@ export default function Home() {
                       <div className="flex items-center gap-3">
                         <img src={BRAND_LOGO_PATH} alt="" className="h-10 w-10 rounded-xl shadow-sm" />
                         <div className="text-left">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Love Regional Pulse News?</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Support from as little as $1 per month</p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Support Regional Pulse News</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
