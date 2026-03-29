@@ -1982,16 +1982,16 @@ export default function Home() {
                     className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                     type="button"
                   >
-                    <div className="flex flex-col items-center gap-3 py-1">
-                      <div className="flex items-center gap-3">
-                        <img src={BRAND_LOGO_PATH} alt="" className="h-10 w-10 rounded-xl shadow-sm" />
+                    <div className="flex flex-col items-center gap-4 py-3">
+                      <div className="flex items-center gap-4">
+                        <img src={BRAND_LOGO_PATH} alt="" className="h-14 w-14 rounded-xl shadow-sm" />
                         <div className="text-left">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Support Regional Pulse News</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
+                          <p className="text-base font-bold text-gray-900 dark:text-white">Support Regional Pulse News</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition group-hover:bg-blue-700">
+                        <span className="inline-flex items-center rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition group-hover:bg-blue-700">
                           Subscribe now
                         </span>
                       </div>
