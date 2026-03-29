@@ -545,11 +545,16 @@ export default function Home() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [subscribeOpen, setSubscribeOpenRaw] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
+  const [restoreMode, setRestoreMode] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState("");
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const setSubscribeOpen = useCallback((open: boolean) => {
     if (open) { window.history.pushState({ modal: "subscribe" }, ""); }
     else if (window.history.state?.modal === "subscribe") { window.history.back(); }
     setSubscribeOpenRaw(open);
+    if (!open) { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); }
   }, []);
 
   // Back button closes modals instead of leaving the site.
@@ -647,6 +652,42 @@ export default function Home() {
   }
 
   // Manage subscription — opens Stripe Customer Portal
+  async function handleRestoreSubscription(e: React.FormEvent) {
+    e.preventDefault();
+    if (!restoreEmail.trim()) return;
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      const res = await fetch("/api/restore-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: restoreEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.subscribed) {
+        setSubscribed(true);
+        setCustomerId(data.customerId || null);
+        window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
+        if (data.customerId) {
+          window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
+        }
+        setRestoreMode(false);
+        setRestoreEmail("");
+        setSubscribeOpen(false);
+      } else {
+        setRestoreError(
+          data.reason === "no_customer"
+            ? "We couldn\u2019t find that email. Please use the email you subscribed with."
+            : "No active subscription found for that email."
+        );
+      }
+    } catch {
+      setRestoreError("Something went wrong. Please try again.");
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   async function handleManageSubscription() {
     if (!customerId) return;
     try {
@@ -1991,6 +2032,12 @@ export default function Home() {
                       <span className="inline-flex items-center rounded-full bg-blue-600 px-7 py-2.5 text-base font-bold text-white shadow-md transition group-hover:bg-blue-700">
                         Subscribe now
                       </span>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRestoreMode(true); setSubscribeOpen(true); }}
+                        className="text-sm text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+                      >
+                        Already subscribed? Restore here
+                      </button>
                     </div>
                   </button>
                 ) : null}
@@ -2509,6 +2556,50 @@ export default function Home() {
                   Secure payment via Stripe. Cancel anytime.
                 </p>
               )}
+
+              <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+                {!restoreMode ? (
+                  <button
+                    onClick={() => { setRestoreMode(true); setRestoreError(null); }}
+                    className="w-full text-center text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Already subscribed? Restore your subscription
+                  </button>
+                ) : (
+                  <form onSubmit={handleRestoreSubscription} className="space-y-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Enter the email you used to subscribe and we&apos;ll restore your ad-free access.
+                    </p>
+                    <input
+                      type="email"
+                      value={restoreEmail}
+                      onChange={(e) => setRestoreEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:border-gray-600 dark:bg-white/[0.05] dark:text-white dark:focus:border-blue-500"
+                    />
+                    {restoreError && (
+                      <p className="text-sm text-red-500 dark:text-red-400">{restoreError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={restoring}
+                        className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {restoring ? "Checking..." : "Restore"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); }}
+                        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-white/[0.05]"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
