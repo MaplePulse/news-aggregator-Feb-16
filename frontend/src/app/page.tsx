@@ -1979,7 +1979,7 @@ export default function Home() {
                 {shouldShowBanner(index) ? (
                   <button
                     onClick={() => setSubscribeOpen(true)}
-                    className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-700 dark:bg-white/[0.04] dark:hover:border-gray-600"
+                    className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                     type="button"
                   >
                     <div className="flex flex-col items-center gap-3 py-1">
