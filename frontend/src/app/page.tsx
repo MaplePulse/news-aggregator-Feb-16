@@ -1979,7 +1979,7 @@ export default function Home() {
                 {shouldShowBanner(index) ? (
                   <button
                     onClick={() => setSubscribeOpen(true)}
-                    className="lg:col-span-2 group cursor-pointer rounded-3xl border border-blue-200/60 bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-5 shadow-sm transition hover:shadow-md hover:border-blue-300 dark:border-blue-500/20 dark:from-blue-950/40 dark:via-black/60 dark:to-indigo-950/30 dark:hover:border-blue-500/40"
+                    className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-700 dark:bg-white/[0.04] dark:hover:border-gray-600"
                     type="button"
                   >
                     <div className="flex flex-col items-center gap-3 py-1">
@@ -1987,12 +1987,12 @@ export default function Home() {
                         <img src={BRAND_LOGO_PATH} alt="" className="h-10 w-10 rounded-xl shadow-sm" />
                         <div className="text-left">
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">Love Regional Pulse News?</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Go ad-free, get a personal RSS feed, and support this app</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Support from as little as $1 per month</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition group-hover:bg-blue-700">
-                          Subscribe from $1.99/mo
+                          Subscribe now
                         </span>
                       </div>
                     </div>
