@@ -96,17 +96,18 @@ async function fetchCluster(
     process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
   try {
-    // Fetch a generous number of clusters so we can find the one we need.
-    // The backend caches aggressively so this is cheap.
+    // Direct cluster lookup — works for any age article
     const res = await fetch(
-      `${backend}/top?region=${encodeURIComponent(region)}&range=48h&limit=100`,
+      `${backend}/cluster/${encodeURIComponent(clusterId)}`,
       { next: { revalidate: 300 } } // ISR: revalidate every 5 min
     );
     if (!res.ok) return null;
 
     const data = await res.json();
-    const clusters: Cluster[] = data?.clusters ?? [];
-    return clusters.find((c) => c.cluster_id === clusterId) ?? null;
+    if (data?.found && data?.cluster) {
+      return data.cluster as Cluster;
+    }
+    return null;
   } catch {
     return null;
   }

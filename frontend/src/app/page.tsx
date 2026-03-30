@@ -549,12 +549,15 @@ export default function Home() {
   const [restoreEmail, setRestoreEmail] = useState("");
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const [restoreStep, setRestoreStep] = useState<"email" | "code">("email");
+  const [restoreCode, setRestoreCode] = useState("");
+  const [restoreToken, setRestoreToken] = useState("");
 
   const setSubscribeOpen = useCallback((open: boolean) => {
     if (open) { window.history.pushState({ modal: "subscribe" }, ""); }
     else if (window.history.state?.modal === "subscribe") { window.history.back(); }
     setSubscribeOpenRaw(open);
-    if (!open) { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); }
+    if (!open) { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); setRestoreCode(""); setRestoreToken(""); setRestoreStep("email"); }
   }, []);
 
   // Back button closes modals instead of leaving the site.
@@ -654,37 +657,72 @@ export default function Home() {
   // Manage subscription — opens Stripe Customer Portal
   async function handleRestoreSubscription(e: React.FormEvent) {
     e.preventDefault();
-    if (!restoreEmail.trim()) return;
-    setRestoring(true);
-    setRestoreError(null);
-    try {
-      const res = await fetch("/api/restore-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: restoreEmail.trim() }),
-      });
-      const data = await res.json();
-      if (data.subscribed) {
-        setSubscribed(true);
-        setCustomerId(data.customerId || null);
-        window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
-        if (data.customerId) {
-          window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
+    if (restoreStep === "email") {
+      if (!restoreEmail.trim()) return;
+      setRestoring(true);
+      setRestoreError(null);
+      try {
+        const res = await fetch("/api/restore-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: restoreEmail.trim() }),
+        });
+        const data = await res.json();
+        if (data.sent) {
+          setRestoreToken(data.token);
+          setRestoreStep("code");
+        } else {
+          setRestoreError(
+            data.reason === "no_customer"
+              ? "We couldn\u2019t find that email. Please use the email you subscribed with."
+              : "No active subscription found for that email."
+          );
         }
-        setRestoreMode(false);
-        setRestoreEmail("");
-        setSubscribeOpen(false);
-      } else {
-        setRestoreError(
-          data.reason === "no_customer"
-            ? "We couldn\u2019t find that email. Please use the email you subscribed with."
-            : "No active subscription found for that email."
-        );
+      } catch {
+        setRestoreError("Something went wrong. Please try again.");
+      } finally {
+        setRestoring(false);
       }
-    } catch {
-      setRestoreError("Something went wrong. Please try again.");
-    } finally {
-      setRestoring(false);
+    } else {
+      if (!restoreCode.trim()) return;
+      setRestoring(true);
+      setRestoreError(null);
+      try {
+        const res = await fetch("/api/verify-restore-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: restoreEmail.trim(),
+            code: restoreCode.trim(),
+            token: restoreToken,
+          }),
+        });
+        const data = await res.json();
+        if (data.verified && data.subscribed) {
+          setSubscribed(true);
+          setCustomerId(data.customerId || null);
+          window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
+          if (data.customerId) {
+            window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
+          }
+          setRestoreMode(false);
+          setRestoreEmail("");
+          setRestoreCode("");
+          setRestoreToken("");
+          setRestoreStep("email");
+          setSubscribeOpen(false);
+        } else {
+          setRestoreError(
+            data.reason === "expired"
+              ? "Code expired. Please go back and try again."
+              : "Invalid code. Please check and try again."
+          );
+        }
+      } catch {
+        setRestoreError("Something went wrong. Please try again.");
+      } finally {
+        setRestoring(false);
+      }
     }
   }
 
@@ -2565,10 +2603,10 @@ export default function Home() {
                   >
                     Already subscribed? Restore your subscription
                   </button>
-                ) : (
+                ) : restoreStep === "email" ? (
                   <form onSubmit={handleRestoreSubscription} className="space-y-3">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Enter the email you used to subscribe and we&apos;ll restore your ad-free access.
+                      Enter the email you used to subscribe. We&apos;ll send you a verification code.
                     </p>
                     <input
                       type="email"
@@ -2587,11 +2625,48 @@ export default function Home() {
                         disabled={restoring}
                         className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
                       >
-                        {restoring ? "Checking..." : "Restore"}
+                        {restoring ? "Sending code..." : "Send code"}
                       </button>
                       <button
                         type="button"
                         onClick={() => { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); }}
+                        className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-white/[0.05]"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleRestoreSubscription} className="space-y-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      We sent a 6-digit code to <strong className="text-gray-800 dark:text-gray-200">{restoreEmail}</strong>. Check your inbox and enter it below.
+                    </p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={restoreCode}
+                      onChange={(e) => setRestoreCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="123456"
+                      required
+                      autoFocus
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-center text-lg font-semibold tracking-widest outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:border-gray-600 dark:bg-white/[0.05] dark:text-white dark:focus:border-blue-500"
+                    />
+                    {restoreError && (
+                      <p className="text-sm text-red-500 dark:text-red-400">{restoreError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={restoring || restoreCode.length < 6}
+                        className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {restoring ? "Verifying..." : "Verify"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRestoreStep("email"); setRestoreCode(""); setRestoreError(null); }}
                         className="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-medium hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-white/[0.05]"
                       >
                         Back
