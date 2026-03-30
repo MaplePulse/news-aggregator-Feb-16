@@ -1769,6 +1769,25 @@ export default function Home() {
                   {mounted ? theme === "dark" ? <SunIcon /> : <MoonIcon /> : <MoonIcon />}
                 </button>
 
+                <button
+                  onClick={() => {
+                    if (subscribed && customerId) {
+                      const url = `${window.location.origin}/api/rss?token=${customerId}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        alert("RSS feed URL copied! Paste it into your favourite reader app (Feedly, Flipboard, etc).");
+                      }).catch(() => {
+                        prompt("Copy your RSS feed URL:", url);
+                      });
+                    } else {
+                      setSubscribeOpen(true);
+                    }
+                  }}
+                  aria-label={subscribed ? "Copy RSS feed URL" : "Subscribe for RSS feed"}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-orange-500 shadow-sm transition hover:border-orange-300 hover:text-orange-600 dark:border-gray-700 dark:bg-black dark:text-orange-400 dark:hover:text-orange-300"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M3.75 3a.75.75 0 01.75.75c0 6.627 5.373 12 12 12a.75.75 0 010 1.5C9.365 17.25 3 10.885 3 3.75A.75.75 0 013.75 3z" /><path d="M3.75 8.5a.75.75 0 01.75.75 7 7 0 007 7 .75.75 0 010 1.5 8.5 8.5 0 01-8.5-8.5.75.75 0 01.75-.75z" /><circle cx="5" cy="15" r="1.5" /></svg>
+                </button>
+
                 {PAYMENTS_ENABLED && (subscribed ? (
                   <button
                     onClick={handleManageSubscription}
@@ -2058,7 +2077,7 @@ export default function Home() {
                 {shouldShowBanner(index) ? (
                   <button
                     onClick={() => setSubscribeOpen(true)}
-                    className="lg:col-span-2 group cursor-pointer rounded-3xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
+                    className="lg:col-span-2 group cursor-pointer rounded-3xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50/60 to-white p-5 shadow-sm transition hover:shadow-md hover:border-blue-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                     type="button"
                   >
                     <div className="flex flex-col items-center gap-5 py-5 px-2">
