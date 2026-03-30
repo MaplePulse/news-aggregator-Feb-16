@@ -1,3 +1,4 @@
+import gc
 import os
 import re
 import json
@@ -1922,9 +1923,11 @@ DEFAULT_UA = (
 )
 
 
-# In-memory feed cache: avoids re-fetching the same RSS URL within a short window
+# In-memory feed cache: avoids re-fetching the same RSS URL within a short window.
+# Stores only the fields we actually use from feedparser results to save memory.
 _FEED_CACHE: Dict[str, Dict[str, Any]] = {}
 _FEED_CACHE_LOCK = threading.Lock()
+_FEED_CACHE_MAX = int(os.getenv("FEED_CACHE_MAX", "120"))
 
 def _feed_cache_ttl_s() -> int:
     try:
@@ -1932,7 +1935,43 @@ def _feed_cache_ttl_s() -> int:
     except Exception:
         return 300  # 5 minutes default
 
-def _fetch_feed(feed_url: str, timeout_s: int = 12) -> feedparser.FeedParserDict:
+
+def _slim_entry(entry: Any) -> Dict[str, Any]:
+    """Extract only the fields _build_article / _parse_date / _extract_entry_categories use."""
+    slim: Dict[str, Any] = {}
+    for key in ("title", "link", "summary", "description", "published", "updated",
+                "published_parsed", "updated_parsed", "category", "categories", "tags"):
+        val = entry.get(key)
+        if val is not None:
+            slim[key] = val
+    # content is a list of dicts; only keep the first value
+    content = entry.get("content")
+    if isinstance(content, list) and content:
+        slim["content"] = [{"value": (content[0].get("value", "") if isinstance(content[0], dict) else "")}]
+    return slim
+
+
+def _slim_feed(parsed: Any) -> Dict[str, Any]:
+    """Return a lightweight dict with only entries + debug metadata from a feedparser result."""
+    return {
+        "entries": [_slim_entry(e) for e in (parsed.entries or [])],
+        "bozo": bool(getattr(parsed, "bozo", False)),
+        "bozo_exception": getattr(parsed, "bozo_exception", None),
+    }
+
+
+class _SlimFeed:
+    """Lightweight stand-in for feedparser.FeedParserDict so existing code
+    that accesses .entries / .bozo / .bozo_exception keeps working."""
+    __slots__ = ("entries", "bozo", "bozo_exception")
+
+    def __init__(self, data: Dict[str, Any]):
+        self.entries = data.get("entries", [])
+        self.bozo = data.get("bozo", False)
+        self.bozo_exception = data.get("bozo_exception")
+
+
+def _fetch_feed(feed_url: str, timeout_s: int = 12) -> Any:
     ttl = _feed_cache_ttl_s()
     now = time.time()
 
@@ -1940,7 +1979,7 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12) -> feedparser.FeedParserDict
     with _FEED_CACHE_LOCK:
         cached = _FEED_CACHE.get(feed_url)
         if cached and (now - cached["ts"]) < ttl:
-            return cached["data"]
+            return _SlimFeed(cached["data"])
 
     req = urllib.request.Request(
         feed_url,
@@ -1954,18 +1993,27 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12) -> feedparser.FeedParserDict
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             raw = resp.read()
         parsed = feedparser.parse(raw)
+        slim_data = _slim_feed(parsed)
+        # Discard the heavy feedparser object immediately
+        del parsed
+        del raw
 
-        # Store in cache
+        # Store slimmed data in cache
         with _FEED_CACHE_LOCK:
-            _FEED_CACHE[feed_url] = {"ts": now, "data": parsed}
-            # Evict old entries if cache grows too large
-            if len(_FEED_CACHE) > 200:
+            _FEED_CACHE[feed_url] = {"ts": now, "data": slim_data}
+            # Evict oldest entries if cache grows too large
+            if len(_FEED_CACHE) > _FEED_CACHE_MAX:
                 cutoff = now - ttl
                 stale = [k for k, v in _FEED_CACHE.items() if v["ts"] < cutoff]
                 for k in stale:
                     _FEED_CACHE.pop(k, None)
+                # If still over limit after stale eviction, drop oldest
+                if len(_FEED_CACHE) > _FEED_CACHE_MAX:
+                    items = sorted(_FEED_CACHE.items(), key=lambda kv: kv[1]["ts"])
+                    for k, _v in items[:len(_FEED_CACHE) - _FEED_CACHE_MAX]:
+                        _FEED_CACHE.pop(k, None)
 
-        return parsed
+        return _SlimFeed(slim_data)
     except urllib.error.URLError as e:
         raise RuntimeError(f"URL error: {e}")
     except Exception as e:
@@ -2134,9 +2182,9 @@ def _top_ttl_s() -> int:
 
 def _top_cache_max_rows() -> int:
     try:
-        return int((os.getenv("TOP_CACHE_MAX_ROWS") or "300").strip())
+        return int((os.getenv("TOP_CACHE_MAX_ROWS") or "150").strip())
     except Exception:
-        return 300
+        return 150
 
 
 def _top_cache_key(region: str, subdivision: str, range: str, q: str, limit: int) -> str:
@@ -2270,9 +2318,9 @@ def _news_ttl_s() -> int:
 
 def _news_cache_max_keys() -> int:
     try:
-        return int((os.getenv("NEWS_CACHE_MAX_KEYS") or "200").strip())
+        return int((os.getenv("NEWS_CACHE_MAX_KEYS") or "80").strip())
     except Exception:
-        return 200
+        return 80
 
 
 def _news_cache_get(key: str) -> Optional[Tuple[Dict[str, Any], int]]:
@@ -2292,8 +2340,9 @@ def _news_cache_get(key: str) -> Optional[Tuple[Dict[str, Any], int]]:
             _NEWS_CACHE.pop(key, None)
             return None
 
-        payload = copy.deepcopy(entry.get("payload", {}))
-        return payload, age
+        # Return cached payload directly (no deepcopy — entries are
+        # effectively read-only between cache refreshes)
+        return entry.get("payload", {}), age
 
 
 def _news_cache_set(key: str, payload: Dict[str, Any]) -> None:
@@ -2303,7 +2352,7 @@ def _news_cache_set(key: str, payload: Dict[str, Any]) -> None:
 
     now = time.time()
     with _NEWS_CACHE_LOCK:
-        _NEWS_CACHE[key] = {"ts": now, "payload": copy.deepcopy(payload)}
+        _NEWS_CACHE[key] = {"ts": now, "payload": payload}
 
         max_keys = _news_cache_max_keys()
         if max_keys > 0 and len(_NEWS_CACHE) > max_keys:
@@ -4812,6 +4861,9 @@ def _worker_loop() -> None:
                             break
                     if total_queued >= max_new_total:
                         break
+                # Free intermediate objects from this region before starting the next
+                gc.collect()
+
                 if total_queued >= max_new_total:
                     break
 
