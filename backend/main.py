@@ -4278,6 +4278,85 @@ def get_top(
     return payload
 
 
+@app.get("/cluster/{cluster_id}")
+def get_cluster_by_id(cluster_id: str):
+    """Look up a single cluster by its ID.
+
+    Search strategy (in order):
+    1. Search top_cache for a cached payload containing this cluster_id (fast, covers recent results)
+    2. Live scan across all regions with a 30-day window (slower, covers fresh RSS data)
+    3. Fall back to cached enrichment data if the cluster_id exists in cluster_enrich_cache
+    """
+    cid = (cluster_id or "").strip()
+    if not cid:
+        raise HTTPException(status_code=400, detail="cluster_id required")
+
+    # --- Strategy 1: search top_cache payloads ---
+    try:
+        with _db() as conn:
+            rows = conn.execute(
+                "SELECT payload_json FROM top_cache ORDER BY created_utc DESC"
+            ).fetchall()
+        for (payload_json,) in rows:
+            try:
+                payload = json.loads(payload_json)
+                for cobj in (payload.get("clusters") or []):
+                    if cobj.get("cluster_id") == cid:
+                        # Inject latest translations
+                        best = cobj.get("best_item")
+                        if isinstance(best, dict):
+                            cached_enrich = _get_cached_cluster_enrich(cid)
+                            if cached_enrich:
+                                best["title_en"] = cached_enrich.get("title_en") or best.get("title_en", "")
+                                best["summary_en"] = cached_enrich.get("summary_en") or best.get("summary_en", "")
+                        return {"found": True, "source": "cache", "cluster": cobj}
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # --- Strategy 2: live scan all regions, 30-day window ---
+    for region_key in LIVE_REGION_KEYS:
+        try:
+            raw = _collect_items(region=region_key, subdivision="all", range="720h", q="", scan_cap=3000)
+            for it in raw:
+                it["topic"] = _topic_label(it)
+                score, factors = _rank_score_and_factors(it)
+                it["rank_score"] = score
+                it["rank_factors"] = factors
+
+            clusters = _cluster_items_v2(raw)
+            for cobj in clusters:
+                if cobj.get("cluster_id") == cid:
+                    best = cobj.get("best_item")
+                    if isinstance(best, dict):
+                        cached_enrich = _get_cached_cluster_enrich(cid)
+                        if cached_enrich:
+                            best["title_en"] = cached_enrich.get("title_en") or best.get("title_en", "")
+                            best["summary_en"] = cached_enrich.get("summary_en") or best.get("summary_en", "")
+                        cobj["best_item"] = _strip_internal_fields(best)
+                    return {"found": True, "source": "live", "region": region_key, "cluster": cobj}
+        except Exception:
+            continue
+
+    # --- Strategy 3: return cached enrichment data as a minimal stub ---
+    cached_enrich = _get_cached_cluster_enrich(cid)
+    if cached_enrich:
+        return {
+            "found": True,
+            "source": "enrich_cache_only",
+            "cluster": {
+                "cluster_id": cid,
+                "best_item": {
+                    "title_en": cached_enrich.get("title_en", ""),
+                    "summary_en": cached_enrich.get("summary_en", ""),
+                },
+            },
+        }
+
+    raise HTTPException(status_code=404, detail="Cluster not found")
+
+
 @app.post("/enrich")
 def enrich_items(req: EnrichRequest, request: Request):
     _rate_limit_check(request)
