@@ -4056,7 +4056,7 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
             return (source, None)
 
     feed_results = []
-    with ThreadPoolExecutor(max_workers=min(10, max(1, len(matched_sources)))) as pool:
+    with ThreadPoolExecutor(max_workers=min(_env_int("FEED_FETCH_MAX_WORKERS", 5), max(1, len(matched_sources)))) as pool:
         futures = {pool.submit(_fetch_source, s): s for s in matched_sources}
         for future in as_completed(futures):
             feed_results.append(future.result())
@@ -4859,10 +4859,21 @@ def _worker_loop() -> None:
 
                         if total_queued >= max_new_total:
                             break
+
+                        # Brief pause between subdivisions to spread memory pressure
+                        _subdiv_stagger_s = _env_int("PRE_ENRICH_SUBDIV_STAGGER_S", 5)
+                        if _subdiv_stagger_s > 0:
+                            time.sleep(_subdiv_stagger_s)
+
                     if total_queued >= max_new_total:
                         break
                 # Free intermediate objects from this region before starting the next
                 gc.collect()
+
+                # Stagger regions: pause between each to keep peak memory lower
+                _region_stagger_s = _env_int("PRE_ENRICH_REGION_STAGGER_S", 30)
+                if _region_stagger_s > 0:
+                    time.sleep(_region_stagger_s)
 
                 if total_queued >= max_new_total:
                     break
