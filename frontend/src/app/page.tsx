@@ -2085,7 +2085,7 @@ export default function Home() {
                 {shouldShowBanner(index) ? (
                   <button
                     onClick={() => setSubscribeOpen(true)}
-                    className="lg:col-span-2 group cursor-pointer rounded-3xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50/60 to-white p-5 shadow-sm transition hover:shadow-md hover:border-blue-300 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+                    className="lg:col-span-2 group cursor-pointer rounded-3xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50/60 to-white p-5 shadow-sm transition hover:shadow-md hover:border-blue-300 dark:border-blue-500/40 dark:bg-black dark:hover:border-blue-400/60"
                     type="button"
                   >
                     <div className="flex flex-col items-center gap-5 py-5 px-2">
@@ -2099,7 +2099,7 @@ export default function Home() {
                       </span>
                       <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRestoreMode(true); setSubscribeOpen(true); }}
-                        className="text-sm text-gray-400 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-300"
+                        className="text-sm text-gray-400 hover:text-blue-500 dark:text-gray-300 dark:hover:text-blue-300"
                       >
                         Already subscribed? Restore here
                       </button>
