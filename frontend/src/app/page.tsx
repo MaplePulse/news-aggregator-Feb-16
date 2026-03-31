@@ -124,6 +124,7 @@ const PRIORITY_ENRICH_COUNT = 5;
 const OBSERVER_ROOT_MARGIN = "900px";
 const GENERIC_ENRICH_ERROR = "Service temporarily unavailable. Please try again later.";
 const STARTUP_SPLASH_MIN_MS = 1800;
+const STARTUP_SPLASH_STANDALONE_MS = 3000;
 
 const UNCATEGORIZED = "General";
 
@@ -1432,7 +1433,8 @@ export default function Home() {
       await loadTopStories(normalizedRegion, savedRange, normalizedSubdivision, savedHeadlineLimit);
 
       const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, STARTUP_SPLASH_MIN_MS - elapsed);
+      const minMs = isStandalone() ? STARTUP_SPLASH_STANDALONE_MS : STARTUP_SPLASH_MIN_MS;
+      const remaining = Math.max(0, minMs - elapsed);
 
       window.setTimeout(() => {
         setShowStartupSplash(false);
