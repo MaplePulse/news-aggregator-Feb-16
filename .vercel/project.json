@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_v781jnpfU00VOW7v47AFkSDWwhgI",
+  "orgId": "team_G1ruYVklsFlQ4wizFmQ1M8sU",
+  "projectName": "news-aggregator-staging",
+  "settings": {
+    "createdAt": 1773912181639,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": "frontend",
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
