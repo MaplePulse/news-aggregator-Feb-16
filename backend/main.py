@@ -1927,7 +1927,7 @@ DEFAULT_UA = (
 # Stores only the fields we actually use from feedparser results to save memory.
 _FEED_CACHE: Dict[str, Dict[str, Any]] = {}
 _FEED_CACHE_LOCK = threading.Lock()
-_FEED_CACHE_MAX = int(os.getenv("FEED_CACHE_MAX", "120"))
+_FEED_CACHE_MAX = int(os.getenv("FEED_CACHE_MAX", "60"))
 
 def _feed_cache_ttl_s() -> int:
     try:
@@ -2318,9 +2318,9 @@ def _news_ttl_s() -> int:
 
 def _news_cache_max_keys() -> int:
     try:
-        return int((os.getenv("NEWS_CACHE_MAX_KEYS") or "80").strip())
+        return int((os.getenv("NEWS_CACHE_MAX_KEYS") or "40").strip())
     except Exception:
-        return 80
+        return 40
 
 
 def _news_cache_get(key: str) -> Optional[Tuple[Dict[str, Any], int]]:
@@ -2431,6 +2431,12 @@ def _rate_limit_check(req: Request) -> None:
 
         bucket.append(now)
         _RATE_BUCKETS[ip] = bucket
+
+        # Periodic global cleanup: remove stale IPs to prevent unbounded growth
+        if len(_RATE_BUCKETS) > 200:
+            stale_ips = [k for k, v in _RATE_BUCKETS.items() if not v or max(v) < cutoff]
+            for k in stale_ips:
+                _RATE_BUCKETS.pop(k, None)
 
 
 # ----------------------------
@@ -4861,6 +4867,10 @@ def _worker_loop() -> None:
                             break
 
                         # Brief pause between subdivisions to spread memory pressure
+                        # Free intermediate objects from this subdivision
+                        del items, clusters
+                        gc.collect()
+
                         _subdiv_stagger_s = _env_int("PRE_ENRICH_SUBDIV_STAGGER_S", 5)
                         if _subdiv_stagger_s > 0:
                             time.sleep(_subdiv_stagger_s)
@@ -4868,6 +4878,18 @@ def _worker_loop() -> None:
                     if total_queued >= max_new_total:
                         break
                 # Free intermediate objects from this region before starting the next
+                # Also flush stale entries from in-memory caches
+                now_ts = time.time()
+                feed_ttl = _feed_cache_ttl_s()
+                with _FEED_CACHE_LOCK:
+                    stale_feeds = [k for k, v in _FEED_CACHE.items() if (now_ts - v["ts"]) > feed_ttl]
+                    for k in stale_feeds:
+                        _FEED_CACHE.pop(k, None)
+                with _NEWS_CACHE_LOCK:
+                    news_ttl = _news_ttl_s()
+                    stale_news = [k for k, v in _NEWS_CACHE.items() if (now_ts - float(v.get("ts", 0))) > news_ttl]
+                    for k in stale_news:
+                        _NEWS_CACHE.pop(k, None)
                 gc.collect()
 
                 # Stagger regions: pause between each to keep peak memory lower
