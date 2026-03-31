@@ -798,6 +798,7 @@ export default function Home() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [ios, setIos] = useState(false);
+  const [showIOSInstall, setShowIOSInstall] = useState(false);
 
   const [loadError, setLoadError] = useState<LoadError>(null);
   const [freshnessAgeS, setFreshnessAgeS] = useState<number | null>(null);
@@ -1640,6 +1641,11 @@ export default function Home() {
         await installEvent.prompt();
         await installEvent.userChoice;
       } catch {}
+      return;
+    }
+
+    if (ios) {
+      setShowIOSInstall(true);
       return;
     }
 
@@ -2889,6 +2895,62 @@ export default function Home() {
           </div>
         </div>
       ) : null}
+
+      {/* iOS Install Instructions Modal */}
+      {showIOSInstall && (
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={() => setShowIOSInstall(false)}>
+          <div className="mx-4 mb-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-900 sm:mb-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Add to Home Screen</h3>
+              <button
+                onClick={() => setShowIOSInstall(false)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                aria-label="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-bold text-white">1</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Tap the Share button</p>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="#007AFF" className="h-4 w-4"><path fillRule="evenodd" d="M13.75 7h-3V3.66l1.95 2.1a.75.75 0 101.1-1.02l-3.25-3.5a.75.75 0 00-1.1 0L6.2 4.74a.75.75 0 001.1 1.02l1.95-2.1V7h-3A2.25 2.25 0 004 9.25v7.5A2.25 2.25 0 006.25 19h7.5A2.25 2.25 0 0016 16.75v-7.5A2.25 2.25 0 0013.75 7zm-3 0h-1.5V3.66v0h1.5V7z" clipRule="evenodd" /></svg>
+                    <span>at the bottom of Safari</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-bold text-white">2</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Scroll down and tap</p>
+                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    <span className="text-base">+</span> Add to Home Screen
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-bold text-white">3</div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">Tap &ldquo;Add&rdquo; in the top right</p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Regional Pulse will appear on your home screen like a regular app</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowIOSInstall(false)}
+              className="mt-6 w-full rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
