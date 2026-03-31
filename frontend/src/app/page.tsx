@@ -2092,14 +2092,14 @@ export default function Home() {
                       <img src={BRAND_LOGO_PATH} alt="" className="h-20 w-20 rounded-2xl shadow-md" />
                       <div className="text-center">
                         <p className="text-xl font-extrabold text-gray-900 dark:text-white">Support Regional Pulse News</p>
-                        <p className="mt-1.5 text-base text-gray-500 dark:text-gray-400">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
+                        <p className="mt-1.5 text-base text-gray-500 dark:text-gray-200">Help us keep delivering translated news and subscribe to go ad-free. Support from as little as $1 per month</p>
                       </div>
                       <span className="inline-flex items-center rounded-full bg-blue-600 px-7 py-2.5 text-base font-bold text-white shadow-md transition group-hover:bg-blue-700">
                         Subscribe now
                       </span>
                       <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setRestoreMode(true); setSubscribeOpen(true); }}
-                        className="text-sm text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+                        className="text-sm text-gray-400 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-300"
                       >
                         Already subscribed? Restore here
                       </button>
