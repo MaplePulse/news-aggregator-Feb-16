@@ -46,11 +46,12 @@ def enrich_if_needed(article: Dict[str, Any], force: bool = False) -> Dict[str, 
     snippet = (article.get("snippet") or "").strip()
     lang_hint = (article.get("lang") or "").strip()
 
-    title_en, summary_en = translate_and_summarize(title=title, snippet=snippet, source_lang_hint=lang_hint)
+    title_en, summary_en, category = translate_and_summarize(title=title, snippet=snippet, source_lang_hint=lang_hint)
     upsert_cache(link=link, title_en=title_en, summary_en=summary_en)
 
     article["title_en"] = title_en
     article["summary_en"] = summary_en
+    article["ai_category"] = category
     article["cache_fresh"] = True
     return article
 
@@ -92,7 +93,7 @@ def enrich_cluster_if_needed(
     snippet = (representative.get("snippet") or representative.get("snippet_text") or "").strip()
     lang_hint = (representative.get("lang") or "").strip()
 
-    title_en, summary_en = translate_and_summarize(title=title, snippet=snippet, source_lang_hint=lang_hint)
+    title_en, summary_en, category = translate_and_summarize(title=title, snippet=snippet, source_lang_hint=lang_hint)
     upsert_cluster_cache(cluster_id=cid, title_en=title_en, summary_en=summary_en)
 
-    return {"title_en": title_en, "summary_en": summary_en, "cache_fresh": True}
+    return {"title_en": title_en, "summary_en": summary_en, "ai_category": category, "cache_fresh": True}
