@@ -1663,10 +1663,17 @@ def _init_db() -> None:
               link TEXT PRIMARY KEY,
               title_en TEXT,
               summary_en TEXT,
+              ai_category TEXT DEFAULT '',
               created_utc TEXT NOT NULL
             )
             """
         )
+
+        # Migration: add ai_category column if missing (existing DBs)
+        try:
+            conn.execute("ALTER TABLE enrich_cache ADD COLUMN ai_category TEXT DEFAULT ''")
+        except Exception:
+            pass  # column already exists
 
         conn.execute(
             """
@@ -1674,10 +1681,17 @@ def _init_db() -> None:
               cluster_id TEXT PRIMARY KEY,
               title_en TEXT,
               summary_en TEXT,
+              ai_category TEXT DEFAULT '',
               created_utc TEXT NOT NULL
             )
             """
         )
+
+        # Migration: add ai_category column if missing (existing DBs)
+        try:
+            conn.execute("ALTER TABLE cluster_enrich_cache ADD COLUMN ai_category TEXT DEFAULT ''")
+        except Exception:
+            pass  # column already exists
 
         conn.execute(
             """
@@ -2026,7 +2040,7 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12) -> Any:
 def _get_cached_enrich(link: str) -> Optional[Dict[str, Any]]:
     with _db() as conn:
         row = conn.execute(
-            "SELECT title_en, summary_en, created_utc FROM enrich_cache WHERE link = ?",
+            "SELECT title_en, summary_en, ai_category, created_utc FROM enrich_cache WHERE link = ?",
             (link,),
         ).fetchone()
         if not row:
@@ -2034,22 +2048,24 @@ def _get_cached_enrich(link: str) -> Optional[Dict[str, Any]]:
         return {
             "title_en": row["title_en"],
             "summary_en": row["summary_en"],
+            "ai_category": row["ai_category"] or "",
             "created_utc": row["created_utc"],
         }
 
 
-def _set_cached_enrich(link: str, title_en: str, summary_en: str) -> None:
+def _set_cached_enrich(link: str, title_en: str, summary_en: str, ai_category: str = "") -> None:
     with _db() as conn:
         conn.execute(
             """
-            INSERT INTO enrich_cache (link, title_en, summary_en, created_utc)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO enrich_cache (link, title_en, summary_en, ai_category, created_utc)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(link) DO UPDATE SET
               title_en=excluded.title_en,
               summary_en=excluded.summary_en,
+              ai_category=excluded.ai_category,
               created_utc=excluded.created_utc
             """,
-            (link, title_en, summary_en, _now_utc_iso()),
+            (link, title_en, summary_en, ai_category or "", _now_utc_iso()),
         )
         conn.commit()
 
@@ -2096,12 +2112,12 @@ def _get_cached_cluster_enrich(cluster_id: str) -> Optional[Dict[str, Any]]:
         return None
     with _db() as conn:
         row = conn.execute(
-            "SELECT title_en, summary_en, created_utc FROM cluster_enrich_cache WHERE cluster_id = ?",
+            "SELECT title_en, summary_en, ai_category, created_utc FROM cluster_enrich_cache WHERE cluster_id = ?",
             (cid,),
         ).fetchone()
         if not row:
             return None
-        return {"title_en": row["title_en"], "summary_en": row["summary_en"], "created_utc": row["created_utc"]}
+        return {"title_en": row["title_en"], "summary_en": row["summary_en"], "ai_category": row["ai_category"] or "", "created_utc": row["created_utc"]}
 
 
 def _get_fresh_cluster_enrich(cluster_id: str) -> Optional[Dict[str, Any]]:
@@ -2115,21 +2131,22 @@ def _get_fresh_cluster_enrich(cluster_id: str) -> Optional[Dict[str, Any]]:
     return cached
 
 
-def _set_cached_cluster_enrich(cluster_id: str, title_en: str, summary_en: str) -> None:
+def _set_cached_cluster_enrich(cluster_id: str, title_en: str, summary_en: str, ai_category: str = "") -> None:
     cid = (cluster_id or "").strip()
     if not cid:
         return
     with _db() as conn:
         conn.execute(
             """
-            INSERT INTO cluster_enrich_cache (cluster_id, title_en, summary_en, created_utc)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO cluster_enrich_cache (cluster_id, title_en, summary_en, ai_category, created_utc)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(cluster_id) DO UPDATE SET
               title_en=excluded.title_en,
               summary_en=excluded.summary_en,
+              ai_category=excluded.ai_category,
               created_utc=excluded.created_utc
             """,
-            (cid, title_en, summary_en, _now_utc_iso()),
+            (cid, title_en, summary_en, ai_category or "", _now_utc_iso()),
         )
         conn.commit()
 
@@ -2297,6 +2314,7 @@ def _inject_cluster_cache_into_payload(payload: Dict[str, Any]) -> None:
 
             best_item["title_en"] = cached_cluster.get("title_en") or ""
             best_item["summary_en"] = cached_cluster.get("summary_en") or ""
+            best_item["ai_category"] = cached_cluster.get("ai_category") or ""
             best_item["has_cached_summary"] = True
     except Exception:
         return
@@ -2771,6 +2789,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
     if cached and cached.get("summary_en"):
         article["title_en"] = cached.get("title_en") or ""
         article["summary_en"] = cached.get("summary_en") or ""
+        article["ai_category"] = cached.get("ai_category") or ""
         article["has_cached_summary"] = True
 
     return article
@@ -3559,6 +3578,16 @@ def _score_category(text: str, rules: Dict[str, Dict[str, float]]) -> Tuple[floa
 
 
 def _topic_label(a: Dict[str, Any]) -> str:
+    # Prefer AI-assigned category (from enrichment) over source categories
+    ai_cat = (a.get("ai_category") or "").strip()
+    if ai_cat and ai_cat != "General":
+        if _env_bool("TOPIC_DEBUG", default=False):
+            a["_topic_debug"] = {
+                "method": "ai_category",
+                "ai_category": ai_cat,
+            }
+        return ai_cat
+
     source_topic = _topic_from_source_categories(a)
     if source_topic:
         if _env_bool("TOPIC_DEBUG", default=False):
@@ -4206,6 +4235,7 @@ def get_clusters(
         if cached_cluster:
             best["title_en"] = cached_cluster.get("title_en") or ""
             best["summary_en"] = cached_cluster.get("summary_en") or ""
+            best["ai_category"] = cached_cluster.get("ai_category") or ""
             best["has_cached_summary"] = True
 
         cscore, cfactors = _cluster_rank_score_and_factors(cobj, subdivision_context=selected_subdivision)
@@ -4293,6 +4323,7 @@ def get_top(
         if cached_cluster:
             best["title_en"] = cached_cluster.get("title_en") or ""
             best["summary_en"] = cached_cluster.get("summary_en") or ""
+            best["ai_category"] = cached_cluster.get("ai_category") or ""
             best["has_cached_summary"] = True
 
         cscore, cfactors = _cluster_rank_score_and_factors(cobj, subdivision_context=selected_subdivision)
@@ -4481,15 +4512,21 @@ def enrich_items(req: EnrichRequest, request: Request):
             }
         )
 
+    from .ai import VALID_CATEGORIES
+    categories_str = ", ".join(VALID_CATEGORIES)
+
     system = (
-        "You translate Spanish/Portuguese news headlines into English and write a short English summary.\n"
+        "You translate Spanish/Portuguese news headlines into English, write a short English summary, "
+        "and classify each article into exactly one category.\n"
         "Return STRICT JSON only.\n"
         "Output shape:\n"
-        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "..."}, ... ] }\n'
+        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "...", "category": "..."}, ... ] }\n'
         "Rules:\n"
         "- title_en: natural English headline.\n"
         "- summary_en: 1–2 sentences, neutral, based ONLY on provided title + snippet.\n"
         "- If snippet is empty/uninformative: say so briefly.\n"
+        f"- category: exactly one of: {categories_str}\n"
+        "- Choose category based on actual article content, NOT the source's own label.\n"
         "- No HTML, no markdown, no backticks.\n"
     )
 
@@ -4507,6 +4544,8 @@ def enrich_items(req: EnrichRequest, request: Request):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Enrichment failed: {e}")
 
+    valid_cats_lower = {c.lower() for c in VALID_CATEGORIES}
+
     link_to_cid: Dict[str, str] = {}
     for it in req.items:
         lnk = (it.link or "").strip()
@@ -4519,20 +4558,25 @@ def enrich_items(req: EnrichRequest, request: Request):
         link = (obj.get("link") or "").strip()
         title_en = (obj.get("title_en") or "").strip()
         summary_en = (obj.get("summary_en") or "").strip()
+        ai_category = (obj.get("category") or "").strip()
         if not link:
             continue
 
+        # Validate category
+        if ai_category.lower() not in valid_cats_lower:
+            ai_category = ""
+
         if title_en and summary_en:
-            _set_cached_enrich(link, title_en, summary_en)
+            _set_cached_enrich(link, title_en, summary_en, ai_category=ai_category)
 
             cid = link_to_cid.get(link) or ""
             if cid:
                 try:
-                    _set_cached_cluster_enrich(cid, title_en, summary_en)
+                    _set_cached_cluster_enrich(cid, title_en, summary_en, ai_category=ai_category)
                 except Exception:
                     pass
 
-        out_items.append({"link": link, "title_en": title_en, "summary_en": summary_en, "cached": False})
+        out_items.append({"link": link, "title_en": title_en, "summary_en": summary_en, "category": ai_category, "cached": False})
 
     return {"items": cached_out + out_items}
 
@@ -4571,7 +4615,7 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
             if cc:
                 try:
                     if link and cc.get("title_en") and cc.get("summary_en"):
-                        _set_cached_enrich(link, cc.get("title_en") or "", cc.get("summary_en") or "")
+                        _set_cached_enrich(link, cc.get("title_en") or "", cc.get("summary_en") or "", ai_category=cc.get("ai_category") or "")
                 except Exception:
                     pass
                 continue
@@ -4589,15 +4633,21 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
     client = _get_openai_client()
     model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
 
+    from .ai import VALID_CATEGORIES
+    categories_str = ", ".join(VALID_CATEGORIES)
+
     system = (
-        "You translate Spanish/Portuguese news headlines into English and write a short English summary.\n"
+        "You translate Spanish/Portuguese news headlines into English, write a short English summary, "
+        "and classify each article into exactly one category.\n"
         "Return STRICT JSON only.\n"
         "Output shape:\n"
-        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "..."}, ... ] }\n'
+        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "...", "category": "..."}, ... ] }\n'
         "Rules:\n"
         "- title_en: natural English headline.\n"
         "- summary_en: 1–2 sentences, neutral, based ONLY on provided title + snippet.\n"
         "- If snippet is empty/uninformative: say so briefly.\n"
+        f"- category: exactly one of: {categories_str}\n"
+        "- Choose category based on actual article content, NOT the source's own label.\n"
         "- No HTML, no markdown, no backticks.\n"
     )
 
@@ -4633,23 +4683,29 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
     except Exception:
         return 0
 
+    valid_cats_lower = {c.lower() for c in VALID_CATEGORIES}
+
     enriched = 0
     for obj in (data.get("items") or []):
         link = (obj.get("link") or "").strip()
         title_en = (obj.get("title_en") or "").strip()
         summary_en = (obj.get("summary_en") or "").strip()
+        ai_category = (obj.get("category") or "").strip()
         if not link or not title_en or not summary_en:
             continue
 
+        if ai_category.lower() not in valid_cats_lower:
+            ai_category = ""
+
         try:
-            _set_cached_enrich(link, title_en, summary_en)
+            _set_cached_enrich(link, title_en, summary_en, ai_category=ai_category)
         except Exception:
             pass
 
         cid = link_to_cid.get(link) or ""
         if cid:
             try:
-                _set_cached_cluster_enrich(cid, title_en, summary_en)
+                _set_cached_cluster_enrich(cid, title_en, summary_en, ai_category=ai_category)
             except Exception:
                 pass
 
@@ -4844,6 +4900,7 @@ def _worker_loop() -> None:
                                     if wc_cached:
                                         wc_best["title_en"] = wc_cached.get("title_en") or ""
                                         wc_best["summary_en"] = wc_cached.get("summary_en") or ""
+                                        wc_best["ai_category"] = wc_cached.get("ai_category") or ""
                                         wc_best["has_cached_summary"] = True
                                 wc["best_item"] = _strip_internal_fields(wc_best)
 
