@@ -4512,7 +4512,7 @@ def enrich_items(req: EnrichRequest, request: Request):
             }
         )
 
-    from .ai import VALID_CATEGORIES
+    from ai import VALID_CATEGORIES
     categories_str = ", ".join(VALID_CATEGORIES)
 
     system = (
@@ -4633,7 +4633,7 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
     client = _get_openai_client()
     model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
 
-    from .ai import VALID_CATEGORIES
+    from ai import VALID_CATEGORIES
     categories_str = ", ".join(VALID_CATEGORIES)
 
     system = (

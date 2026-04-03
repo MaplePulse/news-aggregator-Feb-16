@@ -1,15 +1,15 @@
 # app/enrichment.py
 from typing import Dict, Any, Optional, Tuple
 
-from .config import settings
-from .db import (
+from config import settings
+from db import (
     get_cache_row,
     is_cache_fresh,
     upsert_cache,
     get_cluster_cache_row,
     upsert_cluster_cache,
 )
-from .ai import translate_and_summarize
+from ai import translate_and_summarize
 
 
 # ----------------------------
