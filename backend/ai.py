@@ -1,6 +1,6 @@
 # app/ai.py
 from typing import Tuple
-from .config import settings
+from config import settings
 
 # If you already have a client elsewhere, keep that and remove this.
 try:
