@@ -848,12 +848,12 @@ export default function Home() {
   }, [region, regionOptionsForUi, subdivisionOptions]);
 
   useEffect(() => {
-    if (categories.size > 0) {
+    if (categories.size > 0 && clusters.length > 0) {
       const valid = new Set<CategorySingle>();
       for (const c of categories) { if (topicsInData.has(c)) valid.add(c); }
       if (valid.size !== categories.size) setCategories(valid);
     }
-  }, [topicsInData, categories]);
+  }, [topicsInData, categories, clusters]);
 
   useEffect(() => {
     if (!subdivisionOptions.some((c) => c.key === subdivision)) {
