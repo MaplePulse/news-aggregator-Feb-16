@@ -2318,7 +2318,8 @@ export default function Home() {
                     </label>
                     {categoryOptions.map((c) => {
                       const inData = topicsInData.has(c);
-                      const isSelected = categories.has(c);
+                      const isAllMode = categories.size === 0;
+                      const isSelected = isAllMode ? inData : categories.has(c);
                       return (
                         <label
                           key={c}
@@ -2330,13 +2331,34 @@ export default function Home() {
                             checked={isSelected}
                             disabled={!inData}
                             onChange={() => {
-                              const next = new Set(categories);
-                              if (isSelected) {
-                                next.delete(c);
+                              if (isAllMode) {
+                                // Unchecking from "all" mode: create set of everything except this one
+                                const next = new Set<CategorySingle>();
+                                for (const cat of categoryOptions) {
+                                  if (topicsInData.has(cat) && cat !== c) next.add(cat);
+                                }
+                                setCategories(next);
                               } else {
-                                next.add(c);
+                                const next = new Set(categories);
+                                if (isSelected) {
+                                  next.delete(c);
+                                  // If nothing left selected, go back to "all" mode
+                                  if (next.size === 0) {
+                                    setCategories(new Set());
+                                  } else {
+                                    setCategories(next);
+                                  }
+                                } else {
+                                  next.add(c);
+                                  // If all available categories now selected, switch back to "all" mode
+                                  const allSelected = [...topicsInData].filter(t => CATEGORY_ORDER.includes(t as any)).every(t => next.has(t as CategorySingle));
+                                  if (allSelected) {
+                                    setCategories(new Set());
+                                  } else {
+                                    setCategories(next);
+                                  }
+                                }
                               }
-                              setCategories(next);
                             }}
                             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
                           />
