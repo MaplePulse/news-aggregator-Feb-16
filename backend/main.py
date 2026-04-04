@@ -4777,16 +4777,31 @@ def _worker_loop() -> None:
             total_enriched = 0
             total_queued = 0
 
-            for region_key_raw in regions:
+            # --- Round-robin budget: divide max_new_total evenly across active regions ---
+            # Each region gets at most its fair share so one large region (e.g. South America
+            # with 10+ country buckets) can't consume the whole budget before others are touched.
+            active_regions = []
+            for rk_raw in regions:
                 try:
-                    region_key = _normalize_region(region_key_raw)
+                    rk = _normalize_region(rk_raw)
                 except Exception:
                     continue
+                if rk in LIVE_REGION_KEYS:
+                    active_regions.append(rk)
 
-                if region_key not in LIVE_REGION_KEYS:
-                    continue
+            n_active = max(1, len(active_regions))
+            # Each region gets an equal slice; any leftover goes to the last region.
+            per_region_budget = max(1, max_new_total // n_active)
+
+            for region_idx, region_key in enumerate(active_regions):
+                # Last region may absorb the remainder due to integer division
+                if region_idx == len(active_regions) - 1:
+                    region_max = max_new_total - total_queued
+                else:
+                    region_max = per_region_budget
 
                 region_subdivisions = [k for k in subdivisions if k in _valid_subdivision_keys_for_region(region_key)]
+                region_queued = 0
 
                 for subdivision_key in region_subdivisions:
                     if subdivision_key not in _valid_subdivision_keys_for_region(region_key):
@@ -4856,7 +4871,7 @@ def _worker_loop() -> None:
                             )
 
                         if candidates:
-                            remaining = max(0, max_new_total - total_queued)
+                            remaining = max(0, region_max - region_queued)
                             take = min(max_new_per_bucket, remaining)
                             candidates = candidates[:take]
                         else:
@@ -4864,6 +4879,7 @@ def _worker_loop() -> None:
 
                         bucket_queued = len(candidates)
                         total_queued += bucket_queued
+                        region_queued += bucket_queued
 
                         if candidates:
                             for i in range(0, len(candidates), max(1, batch_size)):
@@ -4871,7 +4887,7 @@ def _worker_loop() -> None:
                                 ecount = _enrich_internal_clusters(chunk)
                                 bucket_enriched += ecount
                                 total_enriched += ecount
-                                if total_queued >= max_new_total:
+                                if region_queued >= region_max:
                                     break
 
                         stats["buckets"][bucket_key] = {
@@ -4920,7 +4936,7 @@ def _worker_loop() -> None:
                         except Exception:
                             pass  # cache warming is best-effort
 
-                        if total_queued >= max_new_total:
+                        if region_queued >= region_max:
                             break
 
                         # Brief pause between subdivisions to spread memory pressure
@@ -4932,7 +4948,7 @@ def _worker_loop() -> None:
                         if _subdiv_stagger_s > 0:
                             time.sleep(_subdiv_stagger_s)
 
-                    if total_queued >= max_new_total:
+                    if region_queued >= region_max:
                         break
                 # Free intermediate objects from this region before starting the next
                 # Also flush stale entries from in-memory caches
@@ -4954,8 +4970,8 @@ def _worker_loop() -> None:
                 if _region_stagger_s > 0:
                     time.sleep(_region_stagger_s)
 
-                if total_queued >= max_new_total:
-                    break
+                # Note: no global bail here — each region has its own budget slice.
+                # The loop naturally ends after all active_regions are processed.
 
             with _worker_lock:
                 _worker_last_ok_utc = _now_utc_iso()
