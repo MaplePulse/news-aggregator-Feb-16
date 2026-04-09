@@ -222,7 +222,11 @@ SOURCES: List[Dict[str, Any]] = [
         "subdivision_flag_url": "https://flagcdn.com/w40/uy.png",
         "country_flag_url": "https://flagcdn.com/w40/uy.png",
         "source_logo": "https://www.elpais.com.uy/favicon.ico",
-        "feed_url": "https://www.elpais.com.uy/rss/",
+        "feed_url": "https://www.elpais.com.uy/rss/latest",
+        "request_headers": {
+            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+            "Accept-Language": "es-UY,es;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
     },
     # --- Argentina (AR) ---
     {
@@ -1998,7 +2002,7 @@ class _SlimFeed:
         self.bozo_exception = data.get("bozo_exception")
 
 
-def _fetch_feed(feed_url: str, timeout_s: int = 12) -> Any:
+def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dict[str, str]] = None) -> Any:
     ttl = _feed_cache_ttl_s()
     now = time.time()
 
@@ -2008,12 +2012,16 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12) -> Any:
         if cached and (now - cached["ts"]) < ttl:
             return _SlimFeed(cached["data"])
 
+    headers = {
+        "User-Agent": DEFAULT_UA,
+        "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+    }
+    if custom_headers:
+        headers.update(custom_headers)
+
     req = urllib.request.Request(
         feed_url,
-        headers={
-            "User-Agent": DEFAULT_UA,
-            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
-        },
+        headers=headers,
         method="GET",
     )
     try:
@@ -4098,7 +4106,8 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
     # Fetch all feeds concurrently (up to 10 at a time)
     def _fetch_source(source):
         try:
-            feed = _fetch_feed(source["feed_url"])
+            custom_headers = source.get("request_headers")
+            feed = _fetch_feed(source["feed_url"], custom_headers=custom_headers)
             return (source, feed)
         except Exception:
             return (source, None)
