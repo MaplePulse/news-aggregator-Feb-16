@@ -1732,6 +1732,8 @@ export default function Home() {
     setSubdivision(nextSubdivision);
     setClusters([]);
     setLoadError(null);
+    // Reset source filter to all sources for the new subdivision
+    setEnabledSources(new Set(sources.map((s) => s.id)));
     await loadTopStories(region, range, nextSubdivision, headlineLimit);
   }
 
