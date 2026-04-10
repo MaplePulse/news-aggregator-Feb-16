@@ -1603,9 +1603,16 @@ export default function Home() {
             const parsed = JSON.parse(saved) as string[];
             // Treat empty array as "no saved preference" - default to all enabled
             if (parsed.length > 0) {
-              setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
-              // Save back to ensure consistency
-              window.localStorage.setItem(`sources_${region}`, JSON.stringify([...parsed]));
+              const filtered = parsed.filter((id) => srcs.some((s) => s.id === id));
+              // If filtered results in empty set (stale/corrupted data), default to all
+              if (filtered.length > 0) {
+                setEnabledSources(new Set(filtered));
+                window.localStorage.setItem(`sources_${region}`, JSON.stringify(filtered));
+              } else {
+                const allEnabled = new Set(srcs.map((s) => s.id));
+                setEnabledSources(allEnabled);
+                window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
+              }
             } else {
               const allEnabled = new Set(srcs.map((s) => s.id));
               setEnabledSources(allEnabled);
