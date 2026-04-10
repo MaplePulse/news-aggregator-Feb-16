@@ -24,3 +24,24 @@
     background-attachment: fixed;
   }
 }
+
+/* RHS scrollbar for filter panel */
+.filter-panel-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.filter-panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.filter-panel-scroll::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.6);
+  border-radius: 4px;
+}
+.filter-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+.dark .filter-panel-scroll::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.6);
+}
+.dark .filter-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(75, 85, 99, 0.8);
+}

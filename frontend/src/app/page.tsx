@@ -2276,7 +2276,7 @@ export default function Home() {
               aria-label="Close filters"
               onClick={() => setFiltersOpen(false)}
             />
-            <div className="relative max-h-[88vh] w-full overflow-x-hidden overflow-y-auto rounded-t-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:rounded-3xl sm:p-6">
+            <div className="filter-panel-scroll relative max-h-[88vh] w-full overflow-x-hidden overflow-y-auto rounded-t-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:rounded-3xl sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h3 className="text-xl font-semibold tracking-tight">Filters</h3>
