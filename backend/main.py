@@ -2039,6 +2039,16 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
     try:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             raw = resp.read()
+        
+        # Decompress if gzip-encoded
+        content_encoding = resp.headers.get('Content-Encoding', '')
+        if 'gzip' in content_encoding or (len(raw) > 2 and raw[:2] == b'\x1f\x8b'):
+            import gzip
+            try:
+                raw = gzip.decompress(raw)
+            except Exception:
+                pass  # If decompression fails, try parsing as-is
+        
         parsed = feedparser.parse(raw)
         
         # Memory optimization: limit entries if requested
