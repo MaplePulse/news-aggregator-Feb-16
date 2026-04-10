@@ -2421,10 +2421,18 @@ export default function Home() {
                     <div className="mb-1.5 flex items-center justify-between">
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sources</label>
                       <button
-                        onClick={() => setEnabledSources(new Set(sources.map((s) => s.id)))}
+                        onClick={() => {
+                          const allSelected = enabledSources.size === sources.length;
+                          if (allSelected) {
+                            // Deselect all - leave only first source enabled (can't have zero)
+                            setEnabledSources(new Set([sources[0]?.id]));
+                          } else {
+                            setEnabledSources(new Set(sources.map((s) => s.id)));
+                          }
+                        }}
                         className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                       >
-                        Select all
+                        {enabledSources.size === sources.length ? "Deselect all" : "Select all"}
                       </button>
                     </div>
                     <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
