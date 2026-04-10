@@ -225,8 +225,18 @@ SOURCES: List[Dict[str, Any]] = [
         "feed_url": "https://www.elpais.com.uy/rss/latest",
         "max_entries": 15,  # Memory limit: El Pais has 100+ articles, causes OOM
         "request_headers": {
-            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "es-UY,es;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
         },
     },
     # --- Argentina (AR) ---
@@ -2016,6 +2026,7 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
     headers = {
         "User-Agent": DEFAULT_UA,
         "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
     }
     if custom_headers:
         headers.update(custom_headers)
