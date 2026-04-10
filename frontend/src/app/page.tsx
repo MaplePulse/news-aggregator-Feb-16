@@ -1173,8 +1173,10 @@ export default function Home() {
         limit: String(selectedHeadlineLimit),
       });
 
-      // Add source filter if not all enabled
-      if (enabledSources.size > 0 && enabledSources.size < sources.length) {
+      // Add source filter if any specific sources selected
+      // Note: we don't check against sources.length here because sources might
+      // not be loaded yet when this fires after restoring from localStorage
+      if (enabledSources.size > 0) {
         params.set("sources", [...enabledSources].join(","));
       }
 
@@ -1442,7 +1444,9 @@ export default function Home() {
       setQuery(savedQuery);
       setPrefsReady(true);
 
-      await loadTopStories(normalizedRegion, savedRange, normalizedSubdivision, savedHeadlineLimit);
+      // Initial load: sources may not be loaded yet, loadTopStories will skip if needed
+      // The sources useEffect will trigger a reload once sources are loaded
+      void loadTopStories(normalizedRegion, savedRange, normalizedSubdivision, savedHeadlineLimit);
 
       const elapsed = Date.now() - startTime;
       const minMs = isStandalone() ? STARTUP_SPLASH_STANDALONE_MS : STARTUP_SPLASH_MIN_MS;
@@ -1611,14 +1615,18 @@ export default function Home() {
   }, [region]);
 
   // Save enabled sources to localStorage and reload feed when changed
+  // Also re-run when sources load so filter applies with correct source list
   useEffect(() => {
     if (!prefsReady || !region) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
-    // Reload feed with new source filter
-    void loadTopStories(region, range, subdivision, headlineLimit);
-  }, [enabledSources, region, prefsReady]);
+    // Only reload if sources are loaded
+    if (sources.length > 0) {
+      // Reload feed with new source filter
+      void loadTopStories(region, range, subdivision, headlineLimit);
+    }
+  }, [enabledSources, region, prefsReady, sources.length]);
 
   useEffect(() => {
     if (!prefsReady) return;
@@ -1723,7 +1731,10 @@ export default function Home() {
     const nextSubdivision = defaultSubdivisionForRegion(nextRegion, regionOptionsForUi, nextSubdivisions);
     setSubdivision(nextSubdivision);
 
-    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
+    // Don't load stories until sources are loaded to preserve filter
+    if (sources.length > 0) {
+      await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
+    }
   }
 
   async function handleSubdivisionChange(nextSubdivision: string) {
@@ -1734,7 +1745,10 @@ export default function Home() {
     setLoadError(null);
     // Reset source filter to all sources for the new subdivision
     setEnabledSources(new Set(sources.map((s) => s.id)));
-    await loadTopStories(region, range, nextSubdivision, headlineLimit);
+    // Don't load stories until sources are loaded to preserve filter
+    if (sources.length > 0) {
+      await loadTopStories(region, range, nextSubdivision, headlineLimit);
+    }
   }
 
   async function handleRangeChange(nextRange: string) {
