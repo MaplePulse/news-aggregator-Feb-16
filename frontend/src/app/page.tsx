@@ -1610,12 +1610,14 @@ export default function Home() {
       .finally(() => setSourcesLoading(false));
   }, [region]);
 
-  // Save enabled sources to localStorage
+  // Save enabled sources to localStorage and reload feed when changed
   useEffect(() => {
     if (!prefsReady || !region) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
+    // Reload feed with new source filter
+    void loadTopStories(region, range, subdivision, headlineLimit);
   }, [enabledSources, region, prefsReady]);
 
   useEffect(() => {
@@ -1730,6 +1732,8 @@ export default function Home() {
     setSubdivision(nextSubdivision);
     setClusters([]);
     setLoadError(null);
+    // Reset source filter to all sources for the new subdivision
+    setEnabledSources(new Set(sources.map((s) => s.id)));
     await loadTopStories(region, range, nextSubdivision, headlineLimit);
   }
 
