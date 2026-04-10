@@ -26,6 +26,11 @@ export async function GET(request: Request) {
     backendParams.set("country", country);
   }
 
+  const sources = searchParams.get("sources");
+  if (sources) {
+    backendParams.set("sources", sources);
+  }
+
   const url = `${backend}/top?${backendParams.toString()}`;
 
   try {
