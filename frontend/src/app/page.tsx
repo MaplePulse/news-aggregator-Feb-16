@@ -2371,7 +2371,7 @@ export default function Home() {
 
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Categories</label>
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                  <div className="rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
                     <label className="flex cursor-pointer items-center justify-between border-b border-gray-200 px-3 py-2.5 dark:border-gray-700">
                       <span className={`text-sm ${categories.size === 0 ? "font-semibold text-black dark:text-white" : "text-gray-700 dark:text-gray-300"}`}>All categories</span>
                       <input
@@ -2453,7 +2453,7 @@ export default function Home() {
                         {enabledSources.size === sources.length ? "Deselect all" : "Select all"}
                       </button>
                     </div>
-                    <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                    <div className="rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
                       {sourcesLoading ? (
                         <div className="px-3 py-4 text-center text-sm text-gray-500">Loading sources...</div>
                       ) : (
