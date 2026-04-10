@@ -518,6 +518,12 @@ export default function Home() {
   );
   const [categories, setCategories] = useState<CategorySelection>(new Set());
   const [headlineLimit, setHeadlineLimit] = useState<HeadlineLimit>(DEFAULT_HEADLINE_LIMIT);
+
+  // Source filter state
+  const [sources, setSources] = useState<{id: string; name: string; source_logo?: string}[]>([]);
+  const [enabledSources, setEnabledSources] = useState<Set<string>>(new Set());
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const countryPickerRef = React.useRef<HTMLDivElement>(null);
 
@@ -993,6 +999,7 @@ export default function Home() {
     setCategories(new Set());
     setHeadlineLimit(nextHeadlineLimit);
     setQuery("");
+    setEnabledSources(new Set(sources.map((s) => s.id))); // Reset sources to all enabled
 
     loadTopStories(nextRegion, nextRange, nextSubdivision, nextHeadlineLimit);
   }
@@ -1165,6 +1172,11 @@ export default function Home() {
         q: "",
         limit: String(selectedHeadlineLimit),
       });
+
+      // Add source filter if not all enabled
+      if (enabledSources.size > 0 && enabledSources.size < sources.length) {
+        params.set("sources", [...enabledSources].join(","));
+      }
 
       const res = await fetch(`/api/top?${params.toString()}`, {
         cache: "no-store",
@@ -1570,6 +1582,41 @@ export default function Home() {
       window.localStorage.setItem(STORAGE_KEYS.category, categories.size > 0 ? [...categories].join(",") : "all");
     } catch {}
   }, [categories, prefsReady]);
+
+  // Fetch sources for the current region
+  useEffect(() => {
+    if (!region) return;
+    setSourcesLoading(true);
+    fetch(`/api/sources?region=${encodeURIComponent(region)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const srcs = (data?.sources || []) as {id: string; name: string; source_logo?: string}[];
+        setSources(srcs);
+        // Load enabled sources from localStorage
+        try {
+          const saved = window.localStorage.getItem(`sources_${region}`);
+          if (saved) {
+            const parsed = JSON.parse(saved) as string[];
+            setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+          } else {
+            // Default: all enabled
+            setEnabledSources(new Set(srcs.map((s) => s.id)));
+          }
+        } catch {
+          setEnabledSources(new Set(srcs.map((s) => s.id)));
+        }
+      })
+      .catch(() => setSources([]))
+      .finally(() => setSourcesLoading(false));
+  }, [region]);
+
+  // Save enabled sources to localStorage
+  useEffect(() => {
+    if (!prefsReady || !region) return;
+    try {
+      window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
+    } catch {}
+  }, [enabledSources, region, prefsReady]);
 
   useEffect(() => {
     if (!prefsReady) return;
@@ -2367,6 +2414,64 @@ export default function Home() {
                     })}
                   </div>
                 </div>
+
+                {/* Sources Filter */}
+                {sources.length > 0 && (
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sources</label>
+                      <button
+                        onClick={() => setEnabledSources(new Set(sources.map((s) => s.id)))}
+                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Select all
+                      </button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                      {sourcesLoading ? (
+                        <div className="px-3 py-4 text-center text-sm text-gray-500">Loading sources...</div>
+                      ) : (
+                        sources.map((src) => {
+                          const isEnabled = enabledSources.has(src.id);
+                          return (
+                            <label
+                              key={src.id}
+                              className="flex cursor-pointer items-center justify-between border-b border-gray-200 px-3 py-2.5 last:border-0 dark:border-gray-700"
+                            >
+                              <span className="flex items-center gap-2">
+                                {src.source_logo && (
+                                  <img src={src.source_logo} alt="" className="inline h-4 w-4 rounded-sm" />
+                                )}
+                                <span className={`text-sm ${isEnabled ? "font-semibold text-black dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
+                                  {src.name}
+                                </span>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={() => {
+                                  const next = new Set(enabledSources);
+                                  if (isEnabled) {
+                                    next.delete(src.id);
+                                    // Don't allow disabling all sources
+                                    if (next.size === 0) next.add(src.id);
+                                  } else {
+                                    next.add(src.id);
+                                  }
+                                  setEnabledSources(next);
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
+                              />
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {enabledSources.size} of {sources.length} sources enabled
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Headline Limit</label>
