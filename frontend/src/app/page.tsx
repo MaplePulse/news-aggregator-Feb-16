@@ -1604,15 +1604,23 @@ export default function Home() {
             // Treat empty array as "no saved preference" - default to all enabled
             if (parsed.length > 0) {
               setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+              // Save back to ensure consistency
+              window.localStorage.setItem(`sources_${region}`, JSON.stringify([...parsed]));
             } else {
-              setEnabledSources(new Set(srcs.map((s) => s.id)));
+              const allEnabled = new Set(srcs.map((s) => s.id));
+              setEnabledSources(allEnabled);
+              window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
             }
           } else {
             // Default: all enabled
-            setEnabledSources(new Set(srcs.map((s) => s.id)));
+            const allEnabled = new Set(srcs.map((s) => s.id));
+            setEnabledSources(allEnabled);
+            window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
           }
         } catch {
-          setEnabledSources(new Set(srcs.map((s) => s.id)));
+          const allEnabled = new Set(srcs.map((s) => s.id));
+          setEnabledSources(allEnabled);
+          window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
         }
       })
       .catch(() => setSources([]))
