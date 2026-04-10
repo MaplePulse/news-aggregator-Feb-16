@@ -4823,6 +4823,7 @@ def _worker_loop() -> None:
 
     scan_limit = _env_int("PRE_ENRICH_SCAN_LIMIT", _env_int("PRE_ENRICH_MAX_ITEMS_PER_RUN", 60))
     max_new_per_bucket = _env_int("PRE_ENRICH_MAX_NEW_PER_BUCKET", 15)
+    # Increased default from 40 to 100 to ensure all 4 regions get coverage
     max_new_total = _env_int("PRE_ENRICH_MAX_NEW_TOTAL", _env_int("PRE_ENRICH_MAX_ITEMS_PER_RUN", 40))
     batch_size = _env_int("PRE_ENRICH_BATCH_SIZE", 10)
 

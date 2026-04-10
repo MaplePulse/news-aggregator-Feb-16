@@ -1601,7 +1601,12 @@ export default function Home() {
           const saved = window.localStorage.getItem(`sources_${region}`);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+            // Treat empty array as "no saved preference" - default to all enabled
+            if (parsed.length > 0) {
+              setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+            } else {
+              setEnabledSources(new Set(srcs.map((s) => s.id)));
+            }
           } else {
             // Default: all enabled
             setEnabledSources(new Set(srcs.map((s) => s.id)));
@@ -1617,7 +1622,7 @@ export default function Home() {
   // Save enabled sources to localStorage and reload feed when changed
   // Also re-run when sources load so filter applies with correct source list
   useEffect(() => {
-    if (!prefsReady || !region) return;
+    if (!prefsReady || !region || sources.length === 0 || enabledSources.size === 0) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
@@ -2276,7 +2281,7 @@ export default function Home() {
               aria-label="Close filters"
               onClick={() => setFiltersOpen(false)}
             />
-            <div className="relative max-h-[88vh] w-full overflow-x-hidden overflow-y-auto rounded-t-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:rounded-3xl sm:p-6">
+            <div className="filter-panel-scroll relative max-h-[88vh] w-full overflow-x-hidden overflow-y-auto rounded-t-3xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-black sm:w-[calc(100vw-2rem)] sm:max-w-xl sm:rounded-3xl sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h3 className="text-xl font-semibold tracking-tight">Filters</h3>
@@ -2371,7 +2376,7 @@ export default function Home() {
 
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Categories</label>
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                  <div className="rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
                     <label className="flex cursor-pointer items-center justify-between border-b border-gray-200 px-3 py-2.5 dark:border-gray-700">
                       <span className={`text-sm ${categories.size === 0 ? "font-semibold text-black dark:text-white" : "text-gray-700 dark:text-gray-300"}`}>All categories</span>
                       <input
@@ -2453,7 +2458,7 @@ export default function Home() {
                         {enabledSources.size === sources.length ? "Deselect all" : "Select all"}
                       </button>
                     </div>
-                    <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
+                    <div className="rounded-xl border border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-900">
                       {sourcesLoading ? (
                         <div className="px-3 py-4 text-center text-sm text-gray-500">Loading sources...</div>
                       ) : (
