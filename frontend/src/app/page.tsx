@@ -1617,7 +1617,7 @@ export default function Home() {
   // Save enabled sources to localStorage and reload feed when changed
   // Also re-run when sources load so filter applies with correct source list
   useEffect(() => {
-    if (!prefsReady || !region) return;
+    if (!prefsReady || !region || sources.length === 0 || enabledSources.size === 0) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
