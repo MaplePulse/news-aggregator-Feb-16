@@ -223,6 +223,7 @@ SOURCES: List[Dict[str, Any]] = [
         "country_flag_url": "https://flagcdn.com/w40/uy.png",
         "source_logo": "https://www.elpais.com.uy/favicon.ico",
         "feed_url": "https://www.elpais.com.uy/rss/latest",
+        "max_entries": 15,  # Memory limit: El Pais has 100+ articles, causes OOM
         "request_headers": {
             "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
             "Accept-Language": "es-UY,es;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -2002,7 +2003,7 @@ class _SlimFeed:
         self.bozo_exception = data.get("bozo_exception")
 
 
-def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dict[str, str]] = None) -> Any:
+def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dict[str, str]] = None, max_entries: Optional[int] = None) -> Any:
     ttl = _feed_cache_ttl_s()
     now = time.time()
 
@@ -2028,6 +2029,11 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             raw = resp.read()
         parsed = feedparser.parse(raw)
+        
+        # Memory optimization: limit entries if requested
+        if max_entries is not None and hasattr(parsed, 'entries'):
+            parsed.entries = parsed.entries[:max_entries]
+        
         slim_data = _slim_feed(parsed)
         # Discard the heavy feedparser object immediately
         del parsed
@@ -2225,13 +2231,14 @@ def _top_cache_max_rows() -> int:
         return 150
 
 
-def _top_cache_key(region: str, subdivision: str, range: str, q: str, limit: int) -> str:
+def _top_cache_key(region: str, subdivision: str, range: str, q: str, limit: int, sources: Optional[str] = None) -> str:
     rg = (region or "").strip().lower()
     sd = (subdivision or "").strip().lower()
     r = (range or "").strip().lower()
     qq = (q or "").strip().lower()
     lim = int(limit)
-    return f"top|region={rg}|subdivision={sd}|range={r}|q={qq}|limit={lim}"
+    src = (sources or "").strip()
+    return f"top|region={rg}|subdivision={sd}|range={r}|q={qq}|limit={lim}|sources={src}"
 
 
 def _top_cache_get(cache_key: str) -> Optional[Tuple[Dict[str, Any], int]]:
@@ -4073,7 +4080,7 @@ def get_uruguay_news(range: str = "24h", q: str = "", limit: int = 50):
     return get_news(region="south-america", subdivision="uy", range=range, q=q, limit=limit)
 
 
-def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: int = 999999) -> List[Dict[str, Any]]:
+def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: int = 999999, source_ids: Optional[set] = None) -> List[Dict[str, Any]]:
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     r = _require_live_region(region)
@@ -4103,11 +4110,17 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
 
         matched_sources.append(source)
 
+    # Filter by source_ids if specified
+    if source_ids:
+        matched_sources = [s for s in matched_sources if s.get("id") in source_ids]
+
     # Fetch all feeds concurrently (up to 10 at a time)
     def _fetch_source(source):
         try:
             custom_headers = source.get("request_headers")
-            feed = _fetch_feed(source["feed_url"], custom_headers=custom_headers)
+            # Memory optimization: limit entries for large feeds (El Pais)
+            max_entries = source.get("max_entries")
+            feed = _fetch_feed(source["feed_url"], custom_headers=custom_headers, max_entries=max_entries)
             return (source, feed)
         except Exception:
             return (source, None)
@@ -4225,9 +4238,15 @@ def get_clusters(
     range: str = "24h",
     q: str = "",
     limit: int = 50,
+    sources: Optional[str] = None,  # comma-separated list of source IDs
 ):
     r = _require_live_region(region)
     selected_subdivision = _normalize_subdivision_for_region(r, _resolve_subdivision_param(subdivision, country))
+
+    # Parse source filter
+    source_ids = set()
+    if sources:
+        source_ids = set(s.strip() for s in sources.split(",") if s.strip())
 
     try:
         lim = int(limit)
@@ -4237,7 +4256,7 @@ def get_clusters(
     lim = _hard_cap_limit(r, selected_subdivision, lim)
 
     scan_cap = min(3000, max(300, lim * 12))
-    raw = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap)
+    raw = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap, source_ids=source_ids if source_ids else None)
 
     for it in raw:
         it["topic"] = _topic_label(it)
@@ -4291,6 +4310,24 @@ def get_clusters(
     return payload
 
 
+@app.get("/sources")
+def get_sources(region: str = DEFAULT_REGION_KEY):
+    """Return all sources for a region with their enabled/disabled status."""
+    r = _require_live_region(region)
+    result = []
+    for src in _sources_for_region(r):
+        result.append({
+            "id": src.get("id"),
+            "name": src.get("name"),
+            "region_key": src.get("region_key"),
+            "subdivision_key": src.get("subdivision_key"),
+            "source_logo": src.get("source_logo"),
+            "subdivision_flag_url": src.get("subdivision_flag_url"),
+            "country_flag_url": src.get("country_flag_url"),
+        })
+    return {"region": r, "sources": result}
+
+
 @app.get("/top")
 def get_top(
     region: str = DEFAULT_REGION_KEY,
@@ -4299,9 +4336,15 @@ def get_top(
     range: str = "24h",
     q: str = "",
     limit: int = 30,
+    sources: Optional[str] = None,  # comma-separated list of source IDs
 ):
     r = _require_live_region(region)
     selected_subdivision = _normalize_subdivision_for_region(r, _resolve_subdivision_param(subdivision, country))
+
+    # Parse source filter
+    source_ids = set()
+    if sources:
+        source_ids = set(s.strip() for s in sources.split(",") if s.strip())
 
     try:
         lim = int(limit)
@@ -4310,7 +4353,7 @@ def get_top(
 
     lim = _hard_cap_limit(r, selected_subdivision, lim)
 
-    cache_key = _top_cache_key(r, selected_subdivision, range, q, lim)
+    cache_key = _top_cache_key(r, selected_subdivision, range, q, lim, sources)
     cached = _top_cache_get(cache_key)
     if cached:
         payload, age_s = cached
@@ -4325,7 +4368,7 @@ def get_top(
         return payload
 
     scan_cap = min(3000, max(300, lim * 14))
-    raw = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap)
+    raw = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap, source_ids=source_ids if source_ids else None)
 
     for it in raw:
         it["topic"] = _topic_label(it)
