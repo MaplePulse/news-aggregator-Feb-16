@@ -1601,7 +1601,12 @@ export default function Home() {
           const saved = window.localStorage.getItem(`sources_${region}`);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+            // Treat empty array as "no saved preference" - default to all enabled
+            if (parsed.length > 0) {
+              setEnabledSources(new Set(parsed.filter((id) => srcs.some((s) => s.id === id))));
+            } else {
+              setEnabledSources(new Set(srcs.map((s) => s.id)));
+            }
           } else {
             // Default: all enabled
             setEnabledSources(new Set(srcs.map((s) => s.id)));
