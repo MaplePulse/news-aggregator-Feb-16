@@ -2063,12 +2063,18 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             raw = resp.read()
         
-        # Decompress if gzip-encoded
+        # Decompress if gzip or brotli encoded
         content_encoding = resp.headers.get('Content-Encoding', '')
         if 'gzip' in content_encoding or (len(raw) > 2 and raw[:2] == b'\x1f\x8b'):
             import gzip
             try:
                 raw = gzip.decompress(raw)
+            except Exception:
+                pass  # If decompression fails, try parsing as-is
+        elif 'br' in content_encoding:
+            try:
+                import brotli
+                raw = brotli.decompress(raw)
             except Exception:
                 pass  # If decompression fails, try parsing as-is
         
