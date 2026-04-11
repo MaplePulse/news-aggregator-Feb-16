@@ -818,7 +818,7 @@ export default function Home() {
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const queuedRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<string[]>([]);
-  const sourcesPopulatedForRegion = useRef<string | null>(null);
+  const hasUserToggledSources = useRef(false);
 
   const failedLogosRef = useRef<Set<string>>(new Set());
   const [, forceRerender] = useState(0);
@@ -1001,6 +1001,7 @@ export default function Home() {
     setHeadlineLimit(nextHeadlineLimit);
     setQuery("");
     setEnabledSources(new Set(sources.map((s) => s.id))); // Reset sources to all enabled
+    hasUserToggledSources.current = false; // Reset toggle tracking on filter reset
 
     loadTopStories(nextRegion, nextRange, nextSubdivision, nextHeadlineLimit);
   }
@@ -1023,6 +1024,7 @@ export default function Home() {
     setCategories(new Set());
     setHeadlineLimit(nextHeadlineLimit);
     setQuery(nextQuery);
+    hasUserToggledSources.current = false; // Reset toggle tracking on region change
 
     const nextSubdivisions = await fetchSubdivisionsForRegion(nextRegion);
     setSubdivisionsData(nextSubdivisions);
@@ -1652,31 +1654,20 @@ export default function Home() {
     fetchSources();
   }, [region]);
 
-  // Save enabled sources to localStorage and reload feed when changed
-  // Skip reload on initial population - only reload on actual user changes
+  // Save enabled sources to localStorage
+  // Only reload feed when USER explicitly toggled sources, not on auto-populate
   useEffect(() => {
     if (!prefsReady || !region || sources.length === 0 || enabledSources.size === 0) return;
+    
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
     
-    // Check if this is initial population for this region
-    const isInitialPopulation = sourcesPopulatedForRegion.current !== region;
-    if (isInitialPopulation) {
-      sourcesPopulatedForRegion.current = region;
-      // Initial load: must reload to show correct region's stories
-      void loadTopStories(region, range, subdivision, headlineLimit);
-      return;
-    }
-    
-    // Check: skip reload if user hasn't changed from default "all" state
-    const isDefaultState = enabledSources.size === sources.length && 
-      sources.every((s) => enabledSources.has(s.id));
-    if (!isDefaultState) {
-      // Reload feed with new source filter
+    // Only reload if user actually toggled a source
+    if (hasUserToggledSources.current) {
       void loadTopStories(region, range, subdivision, headlineLimit);
     }
-  }, [enabledSources, region, prefsReady, sources.length]);
+  }, [enabledSources, region, prefsReady, sources.length, range, subdivision, headlineLimit]);
 
   useEffect(() => {
     if (!prefsReady) return;
@@ -2497,6 +2488,7 @@ export default function Home() {
                           } else {
                             setEnabledSources(new Set(sources.map((s) => s.id)));
                           }
+                          hasUserToggledSources.current = true;
                         }}
                         className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                       >
@@ -2535,6 +2527,7 @@ export default function Home() {
                                     next.add(src.id);
                                   }
                                   setEnabledSources(next);
+                                  hasUserToggledSources.current = true;
                                 }}
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
                               />
