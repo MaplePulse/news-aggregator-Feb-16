@@ -1162,7 +1162,8 @@ export default function Home() {
     selectedRegion = region,
     selectedRange = range,
     selectedSubdivision = subdivision,
-    selectedHeadlineLimit = headlineLimit
+    selectedHeadlineLimit = headlineLimit,
+    sourcesToUse?: Set<string>
   ) {
     setLoading(true);
     setLoadError(null);
@@ -1179,8 +1180,9 @@ export default function Home() {
       // Add source filter if any specific sources selected
       // Note: we don't check against sources.length here because sources might
       // not be loaded yet when this fires after restoring from localStorage
-      if (enabledSources.size > 0) {
-        params.set("sources", [...enabledSources].join(","));
+      const sourcesParam = sourcesToUse ?? enabledSources;
+      if (sourcesParam.size > 0) {
+        params.set("sources", [...sourcesParam].join(","));
       }
 
       const res = await fetch(`/api/top?${params.toString()}`, {
@@ -1663,9 +1665,9 @@ export default function Home() {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
     
-    // Only reload if user actually toggled a source
+    // Only reload if user actually toggled a source - pass current sources explicitly
     if (hasUserToggledSources.current) {
-      void loadTopStories(region, range, subdivision, headlineLimit);
+      void loadTopStories(region, range, subdivision, headlineLimit, enabledSources);
     }
   }, [enabledSources, region, prefsReady, sources.length, range, subdivision, headlineLimit]);
 
@@ -1765,6 +1767,9 @@ export default function Home() {
     setCountryPickerOpen(false);
     setClusters([]);
     setLoadError(null);
+    // Clear source filter when switching regions - let it repopulate for new region
+    setEnabledSources(new Set());
+    hasUserToggledSources.current = false;
 
     const nextSubdivisions = await fetchSubdivisionsForRegion(nextRegion);
     setSubdivisionsData(nextSubdivisions);
@@ -1772,10 +1777,8 @@ export default function Home() {
     const nextSubdivision = defaultSubdivisionForRegion(nextRegion, regionOptionsForUi, nextSubdivisions);
     setSubdivision(nextSubdivision);
 
-    // Don't load stories until sources are loaded to preserve filter
-    if (sources.length > 0) {
-      await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
-    }
+    // Load stories immediately - no source filter until user toggles one
+    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit, new Set());
   }
 
   async function handleSubdivisionChange(nextSubdivision: string) {
@@ -1784,12 +1787,9 @@ export default function Home() {
     setSubdivision(nextSubdivision);
     setClusters([]);
     setLoadError(null);
-    // Reset source filter to all sources for the new subdivision
-    setEnabledSources(new Set(sources.map((s) => s.id)));
-    // Don't load stories until sources are loaded to preserve filter
-    if (sources.length > 0) {
-      await loadTopStories(region, range, nextSubdivision, headlineLimit);
-    }
+    // Don't reset source filter on subdivision change - user may want to keep filtering
+    // Just reload stories with current filter (or no filter if empty)
+    await loadTopStories(region, range, nextSubdivision, headlineLimit);
   }
 
   async function handleRangeChange(nextRange: string) {
