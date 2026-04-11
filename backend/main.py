@@ -4831,9 +4831,9 @@ def _worker_loop() -> None:
 
     subdivisions = _env_list("PRE_ENRICH_SUBDIVISIONS", "")
     if not subdivisions:
-        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,cl,co,pe,ec,ve,cdmx,jalisco,nuevo-leon,edomex,yucatan,guanajuato,gt,cr,sv,hn,ni,pa,bz,es,fr")
+        subdivisions = _env_list("PRE_ENRICH_COUNTRIES", "uy,ar,br,py,bo,cl,co,pe,ec,ve,cdmx,jalisco,nuevo-leon,edomex,yucatan,guanajuato,oaxaca,gt,cr,sv,hn,ni,pa,bz,es,fr")
     if not subdivisions:
-        subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all", "cdmx"]
+        subdivisions = ["uy", "ar", "br", "py", "bo", "mp", "all", "cdmx", "oaxaca"]
 
     scan_limit = _env_int("PRE_ENRICH_SCAN_LIMIT", _env_int("PRE_ENRICH_MAX_ITEMS_PER_RUN", 60))
     max_new_per_bucket = _env_int("PRE_ENRICH_MAX_NEW_PER_BUCKET", 15)
