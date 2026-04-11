@@ -1162,7 +1162,8 @@ export default function Home() {
     selectedRegion = region,
     selectedRange = range,
     selectedSubdivision = subdivision,
-    selectedHeadlineLimit = headlineLimit
+    selectedHeadlineLimit = headlineLimit,
+    sourcesToUse?: Set<string>
   ) {
     setLoading(true);
     setLoadError(null);
@@ -1179,8 +1180,9 @@ export default function Home() {
       // Add source filter if any specific sources selected
       // Note: we don't check against sources.length here because sources might
       // not be loaded yet when this fires after restoring from localStorage
-      if (enabledSources.size > 0) {
-        params.set("sources", [...enabledSources].join(","));
+      const sourcesParam = sourcesToUse ?? enabledSources;
+      if (sourcesParam.size > 0) {
+        params.set("sources", [...sourcesParam].join(","));
       }
 
       const res = await fetch(`/api/top?${params.toString()}`, {
@@ -1663,9 +1665,9 @@ export default function Home() {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
     
-    // Only reload if user actually toggled a source
+    // Only reload if user actually toggled a source - pass current sources explicitly
     if (hasUserToggledSources.current) {
-      void loadTopStories(region, range, subdivision, headlineLimit);
+      void loadTopStories(region, range, subdivision, headlineLimit, enabledSources);
     }
   }, [enabledSources, region, prefsReady, sources.length, range, subdivision, headlineLimit]);
 
@@ -1776,7 +1778,7 @@ export default function Home() {
     setSubdivision(nextSubdivision);
 
     // Load stories immediately - no source filter until user toggles one
-    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
+    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit, new Set());
   }
 
   async function handleSubdivisionChange(nextSubdivision: string) {
