@@ -1635,14 +1635,17 @@ export default function Home() {
   }, [region]);
 
   // Save enabled sources to localStorage and reload feed when changed
-  // Also re-run when sources load so filter applies with correct source list
+  // Skip reload on initial population - only reload on actual user changes
   useEffect(() => {
     if (!prefsReady || !region || sources.length === 0 || enabledSources.size === 0) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
-    // Only reload if sources are loaded
-    if (sources.length > 0) {
+    // Only reload if this is a user-initiated change, not initial population
+    // Check: skip if enabledSources equals all sources (default state)
+    const isDefaultState = enabledSources.size === sources.length && 
+      sources.every((s) => enabledSources.has(s.id));
+    if (!isDefaultState) {
       // Reload feed with new source filter
       void loadTopStories(region, range, subdivision, headlineLimit);
     }
