@@ -1765,6 +1765,9 @@ export default function Home() {
     setCountryPickerOpen(false);
     setClusters([]);
     setLoadError(null);
+    // Clear source filter when switching regions - let it repopulate for new region
+    setEnabledSources(new Set());
+    hasUserToggledSources.current = false;
 
     const nextSubdivisions = await fetchSubdivisionsForRegion(nextRegion);
     setSubdivisionsData(nextSubdivisions);
@@ -1772,10 +1775,8 @@ export default function Home() {
     const nextSubdivision = defaultSubdivisionForRegion(nextRegion, regionOptionsForUi, nextSubdivisions);
     setSubdivision(nextSubdivision);
 
-    // Don't load stories until sources are loaded to preserve filter
-    if (sources.length > 0) {
-      await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
-    }
+    // Load stories immediately - no source filter until user toggles one
+    await loadTopStories(nextRegion, range, nextSubdivision, headlineLimit);
   }
 
   async function handleSubdivisionChange(nextSubdivision: string) {
@@ -1784,12 +1785,9 @@ export default function Home() {
     setSubdivision(nextSubdivision);
     setClusters([]);
     setLoadError(null);
-    // Reset source filter to all sources for the new subdivision
-    setEnabledSources(new Set(sources.map((s) => s.id)));
-    // Don't load stories until sources are loaded to preserve filter
-    if (sources.length > 0) {
-      await loadTopStories(region, range, nextSubdivision, headlineLimit);
-    }
+    // Don't reset source filter on subdivision change - user may want to keep filtering
+    // Just reload stories with current filter (or no filter if empty)
+    await loadTopStories(region, range, nextSubdivision, headlineLimit);
   }
 
   async function handleRangeChange(nextRange: string) {
