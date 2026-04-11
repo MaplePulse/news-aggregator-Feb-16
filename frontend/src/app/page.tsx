@@ -818,6 +818,7 @@ export default function Home() {
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const queuedRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<string[]>([]);
+  const sourcesPopulatedForRegion = useRef<string | null>(null);
 
   const failedLogosRef = useRef<Set<string>>(new Set());
   const [, forceRerender] = useState(0);
@@ -1658,8 +1659,17 @@ export default function Home() {
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
-    // Only reload if this is a user-initiated change, not initial population
-    // Check: skip if enabledSources equals all sources (default state)
+    
+    // Check if this is initial population for this region
+    const isInitialPopulation = sourcesPopulatedForRegion.current !== region;
+    if (isInitialPopulation) {
+      sourcesPopulatedForRegion.current = region;
+      // Initial load: must reload to show correct region's stories
+      void loadTopStories(region, range, subdivision, headlineLimit);
+      return;
+    }
+    
+    // Check: skip reload if user hasn't changed from default "all" state
     const isDefaultState = enabledSources.size === sources.length && 
       sources.every((s) => enabledSources.has(s.id));
     if (!isDefaultState) {
