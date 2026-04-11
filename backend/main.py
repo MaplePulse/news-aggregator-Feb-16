@@ -106,6 +106,7 @@ REGIONS: Dict[str, Dict[str, Any]] = {
             "edomex": {"code": "MEX", "name": "Estado de México", "flag_url": ""},
             "yucatan": {"code": "YUC", "name": "Yucatán", "flag_url": ""},
             "guanajuato": {"code": "GTO", "name": "Guanajuato", "flag_url": ""},
+            "oaxaca": {"code": "OAX", "name": "Oaxaca", "flag_url": ""},
         },
     },
     "central-america": {
@@ -759,6 +760,19 @@ SOURCES: List[Dict[str, Any]] = [
         "country_flag_url": "https://flagcdn.com/w40/mx.png",
         "source_logo": "https://www.am.com.mx/favicon.ico",
         "feed_url": "https://www.am.com.mx/feed/",
+    },
+    {
+        "id": "huatulco_digital_mx",
+        "name": "Huatulco Digital (Oaxaca)",
+        "region_key": "mexico",
+        "subdivision_key": "oaxaca",
+        "country_key": "oaxaca",
+        "subdivision_code": "OAX",
+        "country_code": "OAX",
+        "subdivision_flag_url": "https://flagcdn.com/w40/mx.png",
+        "country_flag_url": "https://flagcdn.com/w40/mx.png",
+        "source_logo": "https://huatulcodigital.com/wp-content/uploads/2025/11/cropped-LOGO-DIARIOS-ELECTRONICOS-scaled-1-32x32.png",
+        "feed_url": "https://huatulcodigital.com/feed/",
     },
 
     # =====================================================================
