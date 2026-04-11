@@ -1588,23 +1588,32 @@ export default function Home() {
   }, [categories, prefsReady]);
 
   // Fetch sources for the current region
+  // This runs in parallel - headlines load immediately, sources populate when ready
   useEffect(() => {
     if (!region) return;
     setSourcesLoading(true);
-    fetch(`/api/sources?region=${encodeURIComponent(region)}`)
-      .then((r) => r.json())
-      .then((data) => {
+    
+    const fetchSources = async (attempt = 1) => {
+      try {
+        const r = await fetch(`/api/sources?region=${encodeURIComponent(region)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
         const srcs = (data?.sources || []) as {id: string; name: string; source_logo?: string}[];
+        
+        if (srcs.length === 0 && attempt < 3) {
+          // Retry if empty response (backend might be cold)
+          setTimeout(() => fetchSources(attempt + 1), 2000);
+          return;
+        }
+        
         setSources(srcs);
         // Load enabled sources from localStorage
         try {
           const saved = window.localStorage.getItem(`sources_${region}`);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            // Treat empty array as "no saved preference" - default to all enabled
             if (parsed.length > 0) {
               const filtered = parsed.filter((id) => srcs.some((s) => s.id === id));
-              // If filtered results in empty set (stale/corrupted data), default to all
               if (filtered.length > 0) {
                 setEnabledSources(new Set(filtered));
                 window.localStorage.setItem(`sources_${region}`, JSON.stringify(filtered));
@@ -1619,7 +1628,6 @@ export default function Home() {
               window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
             }
           } else {
-            // Default: all enabled
             const allEnabled = new Set(srcs.map((s) => s.id));
             setEnabledSources(allEnabled);
             window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
@@ -1629,20 +1637,32 @@ export default function Home() {
           setEnabledSources(allEnabled);
           window.localStorage.setItem(`sources_${region}`, JSON.stringify([...allEnabled]));
         }
-      })
-      .catch(() => setSources([]))
-      .finally(() => setSourcesLoading(false));
+      } catch (err) {
+        if (attempt < 3) {
+          setTimeout(() => fetchSources(attempt + 1), 2000);
+        } else {
+          setSources([]);
+        }
+      } finally {
+        setSourcesLoading(false);
+      }
+    };
+    
+    fetchSources();
   }, [region]);
 
   // Save enabled sources to localStorage and reload feed when changed
-  // Also re-run when sources load so filter applies with correct source list
+  // Skip reload on initial population - only reload on actual user changes
   useEffect(() => {
     if (!prefsReady || !region || sources.length === 0 || enabledSources.size === 0) return;
     try {
       window.localStorage.setItem(`sources_${region}`, JSON.stringify([...enabledSources]));
     } catch {}
-    // Only reload if sources are loaded
-    if (sources.length > 0) {
+    // Only reload if this is a user-initiated change, not initial population
+    // Check: skip if enabledSources equals all sources (default state)
+    const isDefaultState = enabledSources.size === sources.length && 
+      sources.every((s) => enabledSources.has(s.id));
+    if (!isDefaultState) {
       // Reload feed with new source filter
       void loadTopStories(region, range, subdivision, headlineLimit);
     }
