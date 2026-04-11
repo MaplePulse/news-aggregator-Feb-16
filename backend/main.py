@@ -773,6 +773,15 @@ SOURCES: List[Dict[str, Any]] = [
         "country_flag_url": "https://flagcdn.com/w40/mx.png",
         "source_logo": "https://huatulcodigital.com/wp-content/uploads/2025/11/cropped-LOGO-DIARIOS-ELECTRONICOS-scaled-1-32x32.png",
         "feed_url": "https://huatulcodigital.com/feed/",
+        "request_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-MX,es;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        },
     },
 
     # =====================================================================
