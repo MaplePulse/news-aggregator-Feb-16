@@ -1704,8 +1704,16 @@ for region_key, region_cfg in REGIONS.items():
 # Render wipes the code folder on every deploy/restart, so in production
 # CACHE_DB_PATH points at a persistent disk (e.g. /var/data/cache.db) and
 # translations survive. Unset = next to this file, as before (local dev, staging).
-DB_PATH = (os.getenv("CACHE_DB_PATH") or "").strip() or os.path.join(os.path.dirname(__file__), "cache.db")
-os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "cache.db")
+DB_PATH = (os.getenv("CACHE_DB_PATH") or "").strip() or _DEFAULT_DB_PATH
+try:
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+    with open(DB_PATH, "a"):
+        pass
+except OSError as _e:
+    # e.g. CACHE_DB_PATH set before the disk is attached: don't crash, use the old spot.
+    print(f"[cache] can't use {DB_PATH} ({_e}); falling back to {_DEFAULT_DB_PATH}", flush=True)
+    DB_PATH = _DEFAULT_DB_PATH
 
 
 @contextmanager
@@ -4135,7 +4143,7 @@ def healthz():
         "utc": _now_utc_iso(),
         "db_ok": db_ok,
         # Lets the daily report confirm translations are kept across deploys.
-        "cache_persistent": bool((os.getenv("CACHE_DB_PATH") or "").strip()),
+        "cache_persistent": DB_PATH != _DEFAULT_DB_PATH,
         "cached_translations": cached_translations,
     }
 
