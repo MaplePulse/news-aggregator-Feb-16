@@ -31,7 +31,7 @@ export default function PrivacyPage() {
       </h1>
 
       <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-        Last updated: March 25, 2026
+        Last updated: October 22, 2026
       </p>
 
       <section className="mt-8 space-y-6 text-base leading-relaxed text-gray-700 dark:text-gray-300">
@@ -87,23 +87,26 @@ export default function PrivacyPage() {
         </h3>
         <ul className="list-disc space-y-2 pl-6">
           <li>
-            <strong>Analytics:</strong> We use Google Analytics to understand how visitors use the
-            site. This collects anonymized usage data such as pages visited, time on site, device
-            type, and approximate location (country/city level). Google Analytics uses cookies. See{" "}
+            <strong>Analytics:</strong> We use Umami, a privacy-focused analytics service, to count
+            visits and see which pages are popular. Umami does not use cookies, does not track you
+            across other websites, and does not collect personal information. It records anonymous,
+            aggregate data such as pages viewed, referring site, browser and device type, and
+            country. See{" "}
             <a
-              href="https://policies.google.com/privacy"
+              href="https://umami.is/privacy"
               className="text-blue-600 underline dark:text-blue-400"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Google&apos;s privacy policy
+              Umami&apos;s privacy policy
             </a>
             .
           </li>
           <li>
             <strong>Local storage:</strong> We store your theme preference (light/dark mode), region
-            selection, and filter settings in your browser&apos;s local storage. This data stays on
-            your device and is not sent to our servers.
+            selection, and filter settings in your browser&apos;s local storage. If you subscribe,
+            we also store a signed subscription token there so the site remembers you. This data
+            stays on your device and is only sent to our servers when you use a subscriber feature.
           </li>
           <li>
             <strong>Hosting logs:</strong> Our hosting providers (Vercel and Render) may
@@ -140,7 +143,7 @@ export default function PrivacyPage() {
             <strong>Stripe</strong> for payment processing
           </li>
           <li>
-            <strong>Google Analytics</strong> for usage analytics
+            <strong>Umami</strong> for cookie-free, anonymous usage analytics
           </li>
           <li>
             <strong>Formspree</strong> for feedback form processing
@@ -165,8 +168,8 @@ export default function PrivacyPage() {
         </h2>
         <p>
           Subscription data is retained as long as your subscription is active and for a reasonable
-          period afterward for billing and legal purposes. Analytics data is retained according to
-          Google Analytics default settings. You can request deletion of your data by contacting us.
+          period afterward for billing and legal purposes. Analytics data is anonymous and is kept
+          in aggregate by Umami. You can request deletion of your data by contacting us.
         </p>
 
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -178,15 +181,8 @@ export default function PrivacyPage() {
           <li>Request correction or deletion of your personal data</li>
           <li>Cancel your subscription at any time through the customer portal</li>
           <li>
-            Opt out of Google Analytics by installing the{" "}
-            <a
-              href="https://tools.google.com/dlpage/gaoptout"
-              className="text-blue-600 underline dark:text-blue-400"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Google Analytics Opt-out Browser Add-on
-            </a>
+            Opt out of analytics by blocking the Umami script with a content blocker, or by turning
+            on &quot;Do Not Track&quot; in your browser
           </li>
         </ul>
 
