@@ -2861,12 +2861,56 @@ def _topic_from_source_categories(a: Dict[str, Any]) -> Optional[str]:
 
 
 # ----------------------------
+# Shopping / affiliate filter
+# ----------------------------
+# Some outlets mix affiliate shopping posts (coupons, "X% off on Amazon") into
+# their main RSS feeds. They aren't news, so they're dropped at ingestion.
+# Primary signal: the outlet's shopping-section URL path. Backup: headline
+# phrases that only show up in promo posts (kept narrow to avoid hitting real
+# economic news about prices or discounts).
+_SHOPPING_PATH_SEGMENTS = {
+    "favorito",            # ABC (ES) shopping section
+    "descubre-y-compra",   # El Universal (MX) coupons / promo codes
+    "escaparate",          # El País (ES)
+    "guide-shopping",      # Le Parisien (FR)
+    "bons-plans",
+    "codigos-descuento",
+    "codigo-promocional",
+    "cupones",
+    "offerte",
+}
+
+_SHOPPING_TITLE_RE = re.compile(
+    r"\b(c[oó]digos?\s+(promocional(es)?|de\s+descuento)|cup[oó]n(es)?\s+(de\s+descuento\s+)?\w+.*\b20\d\d\b"
+    r"|codice\s+sconto|code\s+promo|cupom\s+de\s+desconto"
+    r"|(rebaja(d[oa]s?)?|descuentos?|sconto|r[ée]duction|desconto)\s+(de\s+)?(hasta\s+(un\s+)?)?-?\d{1,2}\s?%\s.*\bamazon"
+    r"|\bamazon\b.*-?\d{1,2}\s?%\s*(de\s+descuento|dto|off)"
+    r"|\bchollos?\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_shopping_promo(link: str, title: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+
+        segments = {s.lower() for s in urlparse(link).path.split("/") if s}
+    except Exception:
+        segments = set()
+    if segments & _SHOPPING_PATH_SEGMENTS:
+        return True
+    return bool(_SHOPPING_TITLE_RE.search(title or ""))
+
+
+# ----------------------------
 # Article builder
 # ----------------------------
 def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     link = (entry.get("link") or "").strip()
     title = (entry.get("title") or "").strip()
     if not link or not title:
+        return None
+    if _is_shopping_promo(link, title):
         return None
 
     published_dt = _parse_date(entry)
