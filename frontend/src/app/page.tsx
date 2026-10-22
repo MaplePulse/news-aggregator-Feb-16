@@ -711,6 +711,8 @@ export default function Home() {
           body: JSON.stringify({ email: restoreEmail.trim() }),
         });
         const data = await res.json();
+        // The server gives the same answer whether or not the email subscribes,
+        // so the form can't be used to look up who our subscribers are.
         if (data.sent) {
           setRestoreToken(data.token);
           setRestoreStep("code");
@@ -718,11 +720,7 @@ export default function Home() {
           setRestoreError(
             res.status === 429
               ? "Too many requests. Please wait a few minutes and try again."
-              : data.reason === "no_customer"
-                ? "We couldn\u2019t find that email. Please use the email you subscribed with."
-                : data.reason === "no_active_subscription"
-                  ? "No active subscription found for that email."
-                  : "Something went wrong. Please try again."
+              : "Something went wrong. Please try again."
           );
         }
       } catch {
@@ -2910,7 +2908,10 @@ export default function Home() {
                 ) : (
                   <form onSubmit={handleRestoreSubscription} className="space-y-3">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      We sent an 8-character code to <strong className="text-gray-800 dark:text-gray-200">{restoreEmail}</strong>. Check your inbox and enter it below.
+                      If <strong className="text-gray-800 dark:text-gray-200">{restoreEmail}</strong> has an active subscription, we&apos;ve emailed it an 8-character code. Enter it below.
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      No email after a couple of minutes? Check your spam folder, or go back and try the email address you subscribed with.
                     </p>
                     <input
                       type="text"

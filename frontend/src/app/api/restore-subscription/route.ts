@@ -7,6 +7,10 @@ import {
   signRestoreToken,
 } from "@/lib/restoreCode";
 
+// Longer than a typical Stripe lookup + Resend send, so subscriber and
+// non-subscriber replies take the same time.
+const MIN_REPLY_MS = 2500;
+
 export async function POST(request: Request) {
   if (isRateLimited(`restore-ip:${clientIp(request)}`, 5, 600)) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
@@ -39,6 +43,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
+  // The reply must look the same whether or not the email belongs to a subscriber,
+  // so the form can't be used to find out who subscribes. Non-subscribers get a
+  // token for a code nobody receives (any code they try is just "invalid"), and
+  // every reply waits until MIN_REPLY_MS so timing doesn't give it away either.
+  const started = Date.now();
+  const reply = async (body: Record<string, unknown>, status = 200) => {
+    const wait = MIN_REPLY_MS - (Date.now() - started);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    return NextResponse.json(body, { status });
+  };
+
   try {
     // Look up customer by email in Stripe
     const custRes = await fetch(
@@ -47,13 +62,13 @@ export async function POST(request: Request) {
     );
     const custData = await custRes.json();
 
-    if (!custRes.ok || !custData.data?.length) {
-      return NextResponse.json({ sent: false, reason: "no_customer" });
+    if (!custRes.ok) {
+      return reply({ error: "Failed to process request" }, 502);
     }
 
-    // Check for active subscription
+    // Check for an active subscription
     let foundCustomer: string | null = null;
-    for (const customer of custData.data) {
+    for (const customer of custData.data || []) {
       const subRes = await fetch(
         `https://api.stripe.com/v1/subscriptions?customer=${encodeURIComponent(customer.id)}&status=active&limit=1`,
         { headers: { Authorization: `Bearer ${sk}` } }
@@ -65,16 +80,17 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!foundCustomer) {
-      return NextResponse.json({ sent: false, reason: "no_active_subscription" });
-    }
-
     // Generate an 8-character code, valid for 10 minutes
     const code = generateRestoreCode();
     const expiresAt = Math.floor(Date.now() / 1000) + RESTORE_CODE_TTL_S;
     const token = signRestoreToken(email, code, expiresAt);
     if (!token) {
-      return NextResponse.json({ error: "Signing not configured" }, { status: 500 });
+      return reply({ error: "Signing not configured" }, 500);
+    }
+
+    if (!foundCustomer) {
+      // Same shape as a real send; no email goes out.
+      return reply({ sent: true, token });
     }
 
     // Send code via Resend
@@ -104,11 +120,11 @@ export async function POST(request: Request) {
     if (!emailRes.ok) {
       const errData = await emailRes.json().catch(() => ({}));
       console.error("Resend error:", errData);
-      return NextResponse.json({ error: "Failed to send verification email" }, { status: 500 });
+      return reply({ error: "Failed to process request" }, 502);
     }
 
-    return NextResponse.json({ sent: true, token });
+    return reply({ sent: true, token });
   } catch {
-    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
+    return reply({ error: "Failed to process request" }, 500);
   }
 }
