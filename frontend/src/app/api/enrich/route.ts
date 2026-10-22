@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { backendHeaders } from "@/lib/backend";
 
 /**
  * Best-effort in-memory rate limiter.
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
   try {
     const res = await fetch(`${backend}/enrich`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: backendHeaders(request),
       body: JSON.stringify({ items: sanitized }),
       cache: "no-store",
       signal: ac.signal,
@@ -166,8 +167,6 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: aborted ? "Backend /enrich request timed out" : "Failed to reach backend /enrich",
-        detail: String(e),
-        backend_url_used: backend,
         timeout_ms: timeoutMs,
       },
       { status: aborted ? 504 : 502 }
