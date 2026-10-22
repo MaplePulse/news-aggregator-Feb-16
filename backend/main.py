@@ -12,8 +12,9 @@ import hmac
 import math
 import copy
 import unicodedata
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import feedparser
 from fastapi import FastAPI, HTTPException, Request
@@ -1700,17 +1701,37 @@ for region_key, region_cfg in REGIONS.items():
 # ----------------------------
 # SQLite cache
 # ----------------------------
-DB_PATH = os.path.join(os.path.dirname(__file__), "cache.db")
+# Render wipes the code folder on every deploy/restart, so in production
+# CACHE_DB_PATH points at a persistent disk (e.g. /var/data/cache.db) and
+# translations survive. Unset = next to this file, as before (local dev, staging).
+DB_PATH = (os.getenv("CACHE_DB_PATH") or "").strip() or os.path.join(os.path.dirname(__file__), "cache.db")
+os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 
 
-def _db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+@contextmanager
+def _db() -> Iterator[sqlite3.Connection]:
+    """
+    Connection that commits (or rolls back) on exit and is always closed.
+    sqlite3's own `with conn:` only commits and never closes, which leaked
+    one connection per call.
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def _init_db() -> None:
     with _db() as conn:
+        # WAL lets the background worker write while requests read.
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS enrich_cache (
@@ -1774,6 +1795,36 @@ def _init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_meta_created ON cluster_meta_cache(created_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_top_cache_created ON top_cache(created_utc)")
         conn.commit()
+
+
+_last_prune_ts = 0.0
+
+
+def _prune_cache() -> Dict[str, int]:
+    """
+    Now that the cache lives on a persistent disk it would otherwise grow forever.
+    Drops translations older than CACHE_KEEP_DAYS (default 30; older stories are
+    rarely shown and get re-translated on demand) and /top payloads older than 2 days.
+    """
+    global _last_prune_ts
+    _last_prune_ts = time.time()
+    keep_days = max(1, _env_int("CACHE_KEEP_DAYS", 30))
+    now = datetime.now(timezone.utc)
+    cutoffs = {
+        "enrich_cache": (now - timedelta(days=keep_days)).isoformat(),
+        "cluster_enrich_cache": (now - timedelta(days=keep_days)).isoformat(),
+        "cluster_meta_cache": (now - timedelta(days=keep_days)).isoformat(),
+        "top_cache": (now - timedelta(days=2)).isoformat(),
+    }
+    deleted: Dict[str, int] = {}
+    try:
+        with _db() as conn:
+            for table, cutoff in cutoffs.items():
+                cur = conn.execute(f"DELETE FROM {table} WHERE created_utc < ?", (cutoff,))
+                deleted[table] = cur.rowcount
+    except Exception:
+        pass
+    return deleted
 
 
 _init_db()
@@ -4069,9 +4120,11 @@ def read_root():
 
 @app.get("/healthz")
 def healthz():
+    cached_translations = None
     try:
         with _db() as conn:
-            conn.execute("SELECT 1").fetchone()
+            row = conn.execute("SELECT COUNT(*) AS n FROM enrich_cache").fetchone()
+            cached_translations = int(row["n"]) if row else 0
         db_ok = True
     except Exception:
         db_ok = False
@@ -4081,6 +4134,9 @@ def healthz():
         "service": "news-aggregator-backend",
         "utc": _now_utc_iso(),
         "db_ok": db_ok,
+        # Lets the daily report confirm translations are kept across deploys.
+        "cache_persistent": bool((os.getenv("CACHE_DB_PATH") or "").strip()),
+        "cached_translations": cached_translations,
     }
 
 
@@ -4999,6 +5055,10 @@ def _worker_loop() -> None:
         time.sleep(startup_delay_s)
 
     while True:
+        # Daily cache tidy-up (first pass right after startup).
+        if time.time() - _last_prune_ts > 86400:
+            _prune_cache()
+
         enabled = _env_bool("PRE_ENRICH_ENABLED", default=False)
         interval_s = _env_int("PRE_ENRICH_INTERVAL_S", _env_int("PRE_ENRICH_INTERVAL_SECONDS", interval_s))
 
