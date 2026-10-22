@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
+import { clientIp, isRateLimited } from "@/lib/rateLimit";
+import { checkRestoreToken } from "@/lib/restoreCode";
+import { issueSubscriberTokens } from "@/lib/signing";
 
 export async function POST(request: Request) {
   const sk = process.env.STRIPE_SECRET_KEY;
@@ -7,12 +9,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
   }
 
+  if (isRateLimited(`verify-ip:${clientIp(request)}`, 10, 600)) {
+    return NextResponse.json({ verified: false, reason: "rate_limited" }, { status: 429 });
+  }
+
   let email: string, code: string, token: string;
   try {
     const body = await request.json();
-    email = (body.email || "").trim().toLowerCase();
-    code = (body.code || "").trim();
-    token = (body.token || "").trim();
+    email = String(body.email || "").trim().toLowerCase();
+    code = String(body.code || "").trim();
+    token = String(body.token || "").trim();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -21,28 +27,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Email, code, and token required" }, { status: 400 });
   }
 
+  const check = checkRestoreToken(token, email, code);
+  if (check === "expired") {
+    return NextResponse.json({ verified: false, reason: "expired" });
+  }
+  if (check !== "ok") {
+    return NextResponse.json({ verified: false, reason: "invalid_code" });
+  }
+
   try {
-    // Decode and verify token
-    const decoded = JSON.parse(Buffer.from(token, "base64url").toString());
-    const { email: tokenEmail, expiresAt, hmac } = decoded;
-
-    if (tokenEmail !== email) {
-      return NextResponse.json({ verified: false, reason: "invalid_code" });
-    }
-
-    if (Math.floor(Date.now() / 1000) > expiresAt) {
-      return NextResponse.json({ verified: false, reason: "expired" });
-    }
-
-    // Verify HMAC: the code must match what was signed
-    const payload = `${email}:${code}:${expiresAt}`;
-    const expectedHmac = crypto.createHmac("sha256", sk).update(payload).digest("hex");
-
-    if (hmac !== expectedHmac) {
-      return NextResponse.json({ verified: false, reason: "invalid_code" });
-    }
-
-    // Code is valid. Look up customer for the response.
+    // Code is valid. Look up the customer with an active subscription.
     const custRes = await fetch(
       `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=5`,
       { headers: { Authorization: `Bearer ${sk}` } }
@@ -50,7 +44,6 @@ export async function POST(request: Request) {
     const custData = await custRes.json();
 
     let customerId: string | null = null;
-    let subscriptionId: string | null = null;
 
     if (custRes.ok && custData.data?.length) {
       for (const customer of custData.data) {
@@ -61,19 +54,21 @@ export async function POST(request: Request) {
         const subData = await subRes.json();
         if (subRes.ok && subData.data?.length > 0) {
           customerId = customer.id;
-          subscriptionId = subData.data[0].id;
           break;
         }
       }
     }
 
+    if (!customerId) {
+      return NextResponse.json({ verified: true, subscribed: false });
+    }
+
     return NextResponse.json({
       verified: true,
       subscribed: true,
-      customerId,
-      subscriptionId,
+      ...issueSubscriberTokens(customerId),
     });
   } catch {
-    return NextResponse.json({ verified: false, reason: "invalid_token" });
+    return NextResponse.json({ error: "Failed to verify code" }, { status: 500 });
   }
 }
