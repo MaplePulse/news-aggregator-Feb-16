@@ -3,7 +3,9 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "";
+// Umami Cloud (EU). The website ID isn't secret: it's visible in every page's HTML.
+const UMAMI_SCRIPT_URL = "https://cloud.umami.is/script.js";
+const UMAMI_WEBSITE_ID = "944c2141-080f-44f2-917c-93b54d9c9175";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -99,17 +101,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {GA_ID && (
-          <>
-            <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
-            <Script id="ga-init" strategy="afterInteractive">{`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_ID}');
-            `}</Script>
-          </>
-        )}
+        {/* Umami: cookie-free analytics. data-domains limits counting to the live
+            site, so staging previews and local dev don't pollute the stats. */}
+        <Script
+          src={UMAMI_SCRIPT_URL}
+          data-website-id={UMAMI_WEBSITE_ID}
+          data-domains="regionalpulsenews.com,www.regionalpulsenews.com"
+          data-do-not-track="true"
+          strategy="afterInteractive"
+        />
         <ThemeInitScript />
         <ServiceWorkerRegisterScript />
 
