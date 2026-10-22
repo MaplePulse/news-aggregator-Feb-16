@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifySubscriberToken } from "@/lib/signing";
 
 /**
  * Subscriber-Only RSS Feed
@@ -93,7 +94,13 @@ export async function GET(request: Request) {
   const regionParam = searchParams.get("region");
 
   // --- Auth gate: must be a paying subscriber ---
-  if (!token || !token.startsWith("cus_")) {
+  // New feed URLs carry a signed RSS-only token. Older URLs used the raw
+  // Stripe customer ID; those keep working for the feed only (the billing
+  // portal no longer accepts them).
+  const customerId = token
+    ? verifySubscriberToken(token, "rss") || (/^cus_[A-Za-z0-9]+$/.test(token) ? token : null)
+    : null;
+  if (!customerId) {
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -110,7 +117,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const active = await hasActiveSubscription(token);
+  const active = await hasActiveSubscription(customerId);
   if (!active) {
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?>
@@ -185,7 +192,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const selfUrl = `${SITE_URL}/api/rss?token=${token}${regionParam ? `&region=${regionParam}` : ""}`;
+  const selfUrl = `${SITE_URL}/api/rss?token=${encodeURIComponent(token || "")}${regionParam ? `&region=${encodeURIComponent(regionParam)}` : ""}`;
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">

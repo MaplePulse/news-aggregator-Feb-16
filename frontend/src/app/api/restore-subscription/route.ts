@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-
-function generateCode(): string {
-  return crypto.randomInt(100000, 999999).toString();
-}
-
-function signToken(email: string, code: string, expiresAt: number, secret: string): string {
-  const payload = `${email}:${code}:${expiresAt}`;
-  const hmac = crypto.createHmac("sha256", secret).update(payload).digest("hex");
-  return Buffer.from(JSON.stringify({ email, expiresAt, hmac })).toString("base64url");
-}
+import { clientIp, isRateLimited } from "@/lib/rateLimit";
+import {
+  RESTORE_CODE_TTL_S,
+  formatRestoreCode,
+  generateRestoreCode,
+  signRestoreToken,
+} from "@/lib/restoreCode";
 
 export async function POST(request: Request) {
+  if (isRateLimited(`restore-ip:${clientIp(request)}`, 5, 600)) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+  }
+
   const sk = process.env.STRIPE_SECRET_KEY;
   if (!sk) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
@@ -30,8 +30,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  if (!email || !email.includes("@")) {
+  if (!email || !email.includes("@") || email.length > 254) {
     return NextResponse.json({ error: "Valid email required" }, { status: 400 });
+  }
+
+  // Stops the form being used to flood one person's inbox with codes.
+  if (isRateLimited(`restore-email:${email}`, 3, 600)) {
+    return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
   }
 
   try {
@@ -64,10 +69,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ sent: false, reason: "no_active_subscription" });
     }
 
-    // Generate 6-digit code, valid for 10 minutes
-    const code = generateCode();
-    const expiresAt = Math.floor(Date.now() / 1000) + 600;
-    const token = signToken(email, code, expiresAt, sk);
+    // Generate an 8-character code, valid for 10 minutes
+    const code = generateRestoreCode();
+    const expiresAt = Math.floor(Date.now() / 1000) + RESTORE_CODE_TTL_S;
+    const token = signRestoreToken(email, code, expiresAt);
+    if (!token) {
+      return NextResponse.json({ error: "Signing not configured" }, { status: 500 });
+    }
 
     // Send code via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -85,7 +93,7 @@ export async function POST(request: Request) {
             <h2 style="margin: 0 0 8px; font-size: 20px; color: #111;">Restore your subscription</h2>
             <p style="margin: 0 0 24px; color: #555; font-size: 15px;">Enter this code on the website to restore your ad-free access:</p>
             <div style="background: #f0f4ff; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px;">
-              <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #2563eb;">${code}</span>
+              <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #2563eb; font-family: ui-monospace, Menlo, Consolas, monospace;">${formatRestoreCode(code)}</span>
             </div>
             <p style="margin: 0; color: #888; font-size: 13px;">This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>
           </div>
@@ -100,10 +108,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ sent: true, token });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: "Failed to process request", detail: String(e) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Failed to process request" }, { status: 500 });
   }
 }

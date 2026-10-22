@@ -164,7 +164,9 @@ const STORAGE_KEYS = {
   category: "mercosur-news-category",
   headlineLimit: "mercosur-news-headline-limit",
   subscribed: "pulse-news-subscribed",
-  customerId: "pulse-news-customer-id",
+  customerId: "pulse-news-customer-id", // legacy: only used for old RSS URLs
+  subscriberToken: "pulse-news-subscriber-token",
+  rssToken: "pulse-news-rss-token",
 } as const;
 
 const DEFAULT_REGION = "south-america";
@@ -550,6 +552,9 @@ export default function Home() {
   // Subscription state
   const [subscribed, setSubscribed] = useState(false);
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [subscriberToken, setSubscriberToken] = useState<string | null>(null);
+  const [rssToken, setRssToken] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(null);
   const [subscribeOpen, setSubscribeOpenRaw] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [restoreMode, setRestoreMode] = useState(false);
@@ -564,8 +569,39 @@ export default function Home() {
     if (open) { window.history.pushState({ modal: "subscribe" }, ""); }
     else if (window.history.state?.modal === "subscribe") { window.history.back(); }
     setSubscribeOpenRaw(open);
-    if (!open) { setRestoreMode(false); setRestoreError(null); setRestoreEmail(""); setRestoreCode(""); setRestoreToken(""); setRestoreStep("email"); }
+    if (!open) { setRestoreMode(false); setRestoreError(null); setRestoreNotice(null); setRestoreEmail(""); setRestoreCode(""); setRestoreToken(""); setRestoreStep("email"); }
   }, []);
+
+  // Store the signed tokens returned by verify-subscription / verify-restore-code.
+  const saveSubscriberTokens = useCallback((data: { token?: string | null; rssToken?: string | null }) => {
+    setSubscribed(true);
+    window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
+    if (data.token) {
+      setSubscriberToken(data.token);
+      window.localStorage.setItem(STORAGE_KEYS.subscriberToken, data.token);
+    }
+    if (data.rssToken) {
+      setRssToken(data.rssToken);
+      window.localStorage.setItem(STORAGE_KEYS.rssToken, data.rssToken);
+    }
+  }, []);
+
+  function copyRssUrl() {
+    // Subscribers from before signed tokens only have their customer ID; that still works for RSS.
+    const feedToken = rssToken || customerId;
+    if (!feedToken) {
+      setRestoreNotice("Please confirm your email to get your RSS feed link.");
+      setRestoreMode(true);
+      setSubscribeOpen(true);
+      return;
+    }
+    const url = `${window.location.origin}/api/rss?token=${encodeURIComponent(feedToken)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      alert("RSS feed URL copied! Paste it into your favourite reader app (Feedly, Flipboard, etc).");
+    }).catch(() => {
+      prompt("Copy your RSS feed URL:", url);
+    });
+  }
 
   // Back button closes modals instead of leaving the site.
   // Push a history entry when opening; pop it when closing.
@@ -680,9 +716,13 @@ export default function Home() {
           setRestoreStep("code");
         } else {
           setRestoreError(
-            data.reason === "no_customer"
-              ? "We couldn\u2019t find that email. Please use the email you subscribed with."
-              : "No active subscription found for that email."
+            res.status === 429
+              ? "Too many requests. Please wait a few minutes and try again."
+              : data.reason === "no_customer"
+                ? "We couldn\u2019t find that email. Please use the email you subscribed with."
+                : data.reason === "no_active_subscription"
+                  ? "No active subscription found for that email."
+                  : "Something went wrong. Please try again."
           );
         }
       } catch {
@@ -706,12 +746,8 @@ export default function Home() {
         });
         const data = await res.json();
         if (data.verified && data.subscribed) {
-          setSubscribed(true);
-          setCustomerId(data.customerId || null);
-          window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
-          if (data.customerId) {
-            window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
-          }
+          saveSubscriberTokens(data);
+          setRestoreNotice(null);
           setRestoreMode(false);
           setRestoreEmail("");
           setRestoreCode("");
@@ -722,7 +758,11 @@ export default function Home() {
           setRestoreError(
             data.reason === "expired"
               ? "Code expired. Please go back and try again."
-              : "Invalid code. Please check and try again."
+              : data.reason === "rate_limited"
+                ? "Too many attempts. Please wait a few minutes and try again."
+                : data.verified
+                  ? "No active subscription found for that email."
+                  : "Invalid code. Please check and try again."
           );
         }
       } catch {
@@ -734,13 +774,27 @@ export default function Home() {
   }
 
   async function handleManageSubscription() {
-    if (!customerId) return;
+    // The billing portal needs a signed session token. Subscribers from before
+    // tokens existed (or with an invalid one) confirm their email once to get one.
+    const askToConfirmEmail = () => {
+      setRestoreNotice("Please confirm your email to manage your subscription.");
+      setRestoreMode(true);
+      setSubscribeOpen(true);
+    };
+    if (!subscriberToken) {
+      askToConfirmEmail();
+      return;
+    }
     try {
       const res = await fetch("/api/create-portal-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId }),
+        body: JSON.stringify({ token: subscriberToken }),
       });
+      if (res.status === 401) {
+        askToConfirmEmail();
+        return;
+      }
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -755,9 +809,13 @@ export default function Home() {
     // Load saved subscription
     const saved = window.localStorage.getItem(STORAGE_KEYS.subscribed);
     const savedCust = window.localStorage.getItem(STORAGE_KEYS.customerId);
+    const savedToken = window.localStorage.getItem(STORAGE_KEYS.subscriberToken);
+    const savedRssToken = window.localStorage.getItem(STORAGE_KEYS.rssToken);
     if (saved === "true") {
       setSubscribed(true);
       if (savedCust) setCustomerId(savedCust);
+      if (savedToken) setSubscriberToken(savedToken);
+      if (savedRssToken) setRssToken(savedRssToken);
     }
 
     // Check for Stripe checkout return
@@ -771,12 +829,7 @@ export default function Home() {
         .then((r) => r.json())
         .then((data) => {
           if (data.subscribed) {
-            setSubscribed(true);
-            setCustomerId(data.customerId || null);
-            window.localStorage.setItem(STORAGE_KEYS.subscribed, "true");
-            if (data.customerId) {
-              window.localStorage.setItem(STORAGE_KEYS.customerId, data.customerId);
-            }
+            saveSubscriberTokens(data);
           }
         })
         .catch(() => {});
@@ -1888,13 +1941,8 @@ export default function Home() {
 
                 <button
                   onClick={() => {
-                    if (subscribed && customerId) {
-                      const url = `${window.location.origin}/api/rss?token=${customerId}`;
-                      navigator.clipboard.writeText(url).then(() => {
-                        alert("RSS feed URL copied! Paste it into your favourite reader app (Feedly, Flipboard, etc).");
-                      }).catch(() => {
-                        prompt("Copy your RSS feed URL:", url);
-                      });
+                    if (subscribed) {
+                      copyRssUrl();
                     } else {
                       setSubscribeOpen(true);
                     }
@@ -1935,15 +1983,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  if (!customerId) return;
-                  const url = `${window.location.origin}/api/rss?token=${customerId}`;
-                  navigator.clipboard.writeText(url).then(() => {
-                    alert("RSS feed URL copied! Paste it into your favourite reader app (Feedly, Flipboard, etc).");
-                  }).catch(() => {
-                    prompt("Copy your RSS feed URL:", url);
-                  });
-                }}
+                onClick={copyRssUrl}
                 className="text-xs text-orange-600 underline underline-offset-2 transition hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
               >
                 RSS Feed
@@ -2831,6 +2871,11 @@ export default function Home() {
                   </button>
                 ) : restoreStep === "email" ? (
                   <form onSubmit={handleRestoreSubscription} className="space-y-3">
+                    {restoreNotice && (
+                      <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-800 dark:bg-blue-500/10 dark:text-blue-300">
+                        {restoreNotice}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Enter the email you used to subscribe. We&apos;ll send you a verification code.
                     </p>
@@ -2865,16 +2910,17 @@ export default function Home() {
                 ) : (
                   <form onSubmit={handleRestoreSubscription} className="space-y-3">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      We sent a 6-digit code to <strong className="text-gray-800 dark:text-gray-200">{restoreEmail}</strong>. Check your inbox and enter it below.
+                      We sent an 8-character code to <strong className="text-gray-800 dark:text-gray-200">{restoreEmail}</strong>. Check your inbox and enter it below.
                     </p>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
+                      autoCapitalize="characters"
+                      autoComplete="one-time-code"
+                      spellCheck={false}
+                      maxLength={9}
                       value={restoreCode}
-                      onChange={(e) => setRestoreCode(e.target.value.replace(/\D/g, ""))}
-                      placeholder="123456"
+                      onChange={(e) => setRestoreCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+                      placeholder="ABCD2345"
                       required
                       autoFocus
                       className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-center text-lg font-semibold tracking-widest outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 dark:border-gray-600 dark:bg-white/[0.05] dark:text-white dark:focus:border-blue-500"
@@ -2885,7 +2931,7 @@ export default function Home() {
                     <div className="flex gap-2">
                       <button
                         type="submit"
-                        disabled={restoring || restoreCode.length < 6}
+                        disabled={restoring || restoreCode.length < 8}
                         className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
                       >
                         {restoring ? "Verifying..." : "Verify"}

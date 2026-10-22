@@ -8,6 +8,7 @@ import urllib.request
 import urllib.error
 import threading
 import hashlib
+import hmac
 import math
 import copy
 import unicodedata
@@ -2501,7 +2502,35 @@ def _env_float(key: str, default: float) -> float:
         return default
 
 
+def _backend_secret() -> str:
+    return (os.getenv("BACKEND_SHARED_SECRET") or "").strip()
+
+
+def _has_backend_key(req: Request) -> bool:
+    secret = _backend_secret()
+    if not secret:
+        return False
+    sent = (req.headers.get("x-backend-key") or "").strip()
+    return bool(sent) and hmac.compare_digest(sent.encode("utf-8"), secret.encode("utf-8"))
+
+
+def _require_backend_key(req: Request) -> None:
+    """
+    Paid / side-effecting endpoints (/enrich, /feedback) only accept calls from
+    our own Next.js API routes once BACKEND_SHARED_SECRET is set (same value in
+    Vercel and Render). Until it's set, behaviour is unchanged so deploys don't break.
+    """
+    if _backend_secret() and not _has_backend_key(req):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 def _client_ip(req: Request) -> str:
+    # Behind Vercel, req.client is Vercel's server, so every visitor would share
+    # one bucket. Trust the forwarded visitor IP only from a caller holding the secret.
+    if _has_backend_key(req):
+        fwd = (req.headers.get("x-client-ip") or "").strip()
+        if fwd:
+            return fwd[:64]
     try:
         if req.client and req.client.host:
             return str(req.client.host)
@@ -2832,12 +2861,56 @@ def _topic_from_source_categories(a: Dict[str, Any]) -> Optional[str]:
 
 
 # ----------------------------
+# Shopping / affiliate filter
+# ----------------------------
+# Some outlets mix affiliate shopping posts (coupons, "X% off on Amazon") into
+# their main RSS feeds. They aren't news, so they're dropped at ingestion.
+# Primary signal: the outlet's shopping-section URL path. Backup: headline
+# phrases that only show up in promo posts (kept narrow to avoid hitting real
+# economic news about prices or discounts).
+_SHOPPING_PATH_SEGMENTS = {
+    "favorito",            # ABC (ES) shopping section
+    "descubre-y-compra",   # El Universal (MX) coupons / promo codes
+    "escaparate",          # El País (ES)
+    "guide-shopping",      # Le Parisien (FR)
+    "bons-plans",
+    "codigos-descuento",
+    "codigo-promocional",
+    "cupones",
+    "offerte",
+}
+
+_SHOPPING_TITLE_RE = re.compile(
+    r"\b(c[oó]digos?\s+(promocional(es)?|de\s+descuento)|cup[oó]n(es)?\s+(de\s+descuento\s+)?\w+.*\b20\d\d\b"
+    r"|codice\s+sconto|code\s+promo|cupom\s+de\s+desconto"
+    r"|(rebaja(d[oa]s?)?|descuentos?|sconto|r[ée]duction|desconto)\s+(de\s+)?(hasta\s+(un\s+)?)?-?\d{1,2}\s?%\s.*\bamazon"
+    r"|\bamazon\b.*-?\d{1,2}\s?%\s*(de\s+descuento|dto|off)"
+    r"|\bchollos?\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_shopping_promo(link: str, title: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+
+        segments = {s.lower() for s in urlparse(link).path.split("/") if s}
+    except Exception:
+        segments = set()
+    if segments & _SHOPPING_PATH_SEGMENTS:
+        return True
+    return bool(_SHOPPING_TITLE_RE.search(title or ""))
+
+
+# ----------------------------
 # Article builder
 # ----------------------------
 def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     link = (entry.get("link") or "").strip()
     title = (entry.get("title") or "").strip()
     if not link or not title:
+        return None
+    if _is_shopping_promo(link, title):
         return None
 
     published_dt = _parse_date(entry)
@@ -4107,7 +4180,12 @@ def get_countries(region: str = DEFAULT_REGION_KEY):
 
 
 @app.get("/debug-sources")
-def debug_sources(region: Optional[str] = None):
+def debug_sources(request: Request, region: Optional[str] = None):
+    # Fetches every feed on demand, so it's not public: needs the backend key,
+    # or DEBUG_ENDPOINTS_ENABLED=1 (e.g. for local dev).
+    if not (_has_backend_key(request) or _env_bool("DEBUG_ENDPOINTS_ENABLED", default=False)):
+        raise HTTPException(status_code=404, detail="Not Found")
+
     normalized_region = None
     if region is not None and region.strip():
         normalized_region = _normalize_region(region)
@@ -4601,10 +4679,22 @@ def get_cluster_by_id(cluster_id: str):
 
 @app.post("/enrich")
 def enrich_items(req: EnrichRequest, request: Request):
+    _require_backend_key(request)
     _rate_limit_check(request)
 
     if not req.items:
         return {"items": []}
+
+    # Hard caps so one request can't trigger an oversized (expensive) AI call.
+    # Mirrors the Next.js /api/enrich limits.
+    max_items = max(1, _env_int("ENRICH_MAX_ITEMS", 12))
+    req.items = req.items[:max_items]
+    for it in req.items:
+        it.title = (it.title or "")[:280]
+        it.link = (it.link or "")[:2048]
+        it.source = (it.source or "")[:120]
+        it.snippet = (it.snippet or "")[:1200]
+        it.cluster_id = (it.cluster_id or "")[:128] or None
 
     cached_out = []
     to_do: List[EnrichItem] = []
@@ -5212,7 +5302,8 @@ def _send_feedback_email(name: str, email: str, message: str) -> None:
 
 
 @app.post("/feedback")
-def submit_feedback(req: FeedbackRequest):
+def submit_feedback(req: FeedbackRequest, request: Request):
+    _require_backend_key(request)
     try:
         _send_feedback_email(req.name, req.email, req.message)
     except Exception as e:

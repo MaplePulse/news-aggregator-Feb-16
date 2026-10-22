@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { issueSubscriberTokens } from "@/lib/signing";
 
 export async function GET(request: Request) {
   const sk = process.env.STRIPE_SECRET_KEY;
@@ -37,13 +38,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       subscribed: true,
-      customerId: data.customer,
-      subscriptionId: data.subscription,
+      ...issueSubscriberTokens(data.customer),
     });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: "Failed to verify subscription", detail: String(e) },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Failed to verify subscription" }, { status: 500 });
   }
 }

@@ -3,11 +3,16 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Best-effort cleanup only. The CSP sandbox header below is what actually
+// stops scripts, since regex stripping can't catch every trick.
 function stripDangerousTags(html: string) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "");
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<(object|embed|form|base|meta)\b[^>]*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*(["']?)\s*javascript:/gi, "$1=$2#");
 }
 
 function addBasicStyles(bodyHtml: string, title: string) {
@@ -44,6 +49,17 @@ function escapeHtml(s: string) {
     .replaceAll("'", "&#039;");
 }
 
+// The reader only exists for La Diaria links (see openTranslated in page.tsx).
+// Anything else is refused so this route can't be used as an open proxy.
+const ALLOWED_HOSTS = ["ladiaria.com.uy"];
+const FETCH_TIMEOUT_MS = 10000;
+const MAX_HTML_BYTES = 3 * 1024 * 1024;
+
+function isAllowedHost(hostname: string) {
+  const h = hostname.toLowerCase();
+  return ALLOWED_HOSTS.some((d) => h === d || h.endsWith(`.${d}`));
+}
+
 function safeUrl(raw: string) {
   let u: URL;
   try {
@@ -52,8 +68,21 @@ function safeUrl(raw: string) {
     return null;
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  if (u.username || u.password) return null;
+  if (!isAllowedHost(u.hostname)) return null;
   return u;
 }
+
+// Third-party HTML is served from our origin, so lock it down:
+// no scripts, no forms, opaque origin (no access to our localStorage).
+const SANDBOX_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "no-store",
+  "Content-Security-Policy":
+    "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+};
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -63,16 +92,36 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid url" }, { status: 400 });
   }
 
-  const res = await fetch(u.toString(), {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(u.toString(), {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    return NextResponse.json({ error: "Fetch failed" }, { status: 502 });
+  }
 
-  const html = await res.text();
+  // Redirects are followed, so re-check where we actually ended up.
+  const finalUrl = safeUrl(res.url || u.toString());
+  if (!finalUrl) {
+    return NextResponse.json({ error: "Redirected to a disallowed host" }, { status: 400 });
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType && !contentType.includes("html")) {
+    return NextResponse.json({ error: "Not an HTML page" }, { status: 415 });
+  }
+  if (Number(res.headers.get("content-length") || 0) > MAX_HTML_BYTES) {
+    return NextResponse.json({ error: "Page too large" }, { status: 413 });
+  }
+
+  const html = (await res.text()).slice(0, MAX_HTML_BYTES);
   if (!html) {
     return NextResponse.json({ error: "Empty response" }, { status: 502 });
   }
@@ -102,10 +151,5 @@ export async function GET(req: Request) {
 
   const out = addBasicStyles(header + bodyInner, title);
 
-  return new NextResponse(out, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
+  return new NextResponse(out, { headers: SANDBOX_HEADERS });
 }
