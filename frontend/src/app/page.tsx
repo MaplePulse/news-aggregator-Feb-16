@@ -862,6 +862,9 @@ export default function Home() {
   const [freshnessAgeS, setFreshnessAgeS] = useState<number | null>(null);
 
   const [enrichState, setEnrichState] = useState<Record<string, EnrichState>>({});
+  // True while the translation service is failing (e.g. AI provider out of credit),
+  // so we can tell readers why headlines are in their original language.
+  const [translationPaused, setTranslationPaused] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const [comingSoonMessage, setComingSoonMessage] = useState("");
 
@@ -1346,6 +1349,8 @@ export default function Home() {
       const enriched = (data?.items || data?.backend_response?.items || []) as any[];
 
       if (!res.ok) {
+        // 5xx = the backend or its AI provider is down; 429 is just our own rate limit.
+        if (res.status >= 500) setTranslationPaused(true);
         markBatchError(batchLinks);
         return;
       }
@@ -1363,6 +1368,8 @@ export default function Home() {
           got.add(link);
         }
       }
+
+      if (got.size > 0) setTranslationPaused(false);
 
       const missed = batchLinks.filter((l) => !got.has(l));
       if (missed.length > 0) markBatchError(missed);
@@ -1972,6 +1979,20 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {translationPaused ? (
+          <div
+            role="status"
+            className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-500/10 dark:text-amber-200"
+          >
+            <span aria-hidden="true">🛠️</span>
+            <span>
+              <strong>Translation is temporarily paused for maintenance.</strong> Some of the latest
+              headlines are showing in their original language. We&apos;re working on it and they&apos;ll
+              switch to English automatically.
+            </span>
+          </div>
+        ) : null}
 
         {PAYMENTS_ENABLED && subscribed ? (
           <div className="mt-3 flex items-center justify-between rounded-2xl border border-green-200 bg-green-50/80 px-3 py-1.5 dark:border-green-800 dark:bg-green-500/10">
