@@ -90,8 +90,8 @@ export default function PrivacyPage() {
             <strong>Analytics:</strong> We use Umami, a privacy-focused analytics service, to count
             visits and see which pages are popular. Umami does not use cookies, does not track you
             across other websites, and does not collect personal information. It records anonymous,
-            aggregate data such as pages viewed, referring site, browser and device type, and
-            country. See{" "}
+            aggregate data such as pages viewed, how long each page was open for reading,
+            referring site, browser and device type, and country. See{" "}
             <a
               href="https://umami.is/privacy"
               className="text-blue-600 underline dark:text-blue-400"
