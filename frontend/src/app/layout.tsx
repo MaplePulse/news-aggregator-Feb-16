@@ -75,6 +75,66 @@ function ThemeInitScript() {
   return <script dangerouslySetInnerHTML={{ __html: code }} />;
 }
 
+// Reading time, for analytics. Umami's own visit time only counts the gap between
+// the first and last page view, so a visitor who reads one page and leaves shows 0s.
+// This counts the time a page is on screen, with each gap between scrolls/taps/keys
+// capped at 2 minutes so a tab left open doesn't count the time away, and sends it
+// as a "read_time" event when the page is hidden, closed, or swapped for another.
+function ReadingTimeScript() {
+  const code = `
+(function () {
+  try {
+    var MAX_GAP = 120000;
+    var ms = 0, lastAt = document.hidden ? 0 : Date.now(), path = location.pathname;
+    function count() {
+      var now = Date.now();
+      if (lastAt) ms += Math.min(now - lastAt, MAX_GAP);
+      lastAt = now;
+    }
+    function send() {
+      var secs = Math.round(ms / 1000);
+      ms = 0;
+      if (secs >= 1 && window.umami && window.umami.track) {
+        window.umami.track("read_time", { secs: secs, page: path.slice(0, 200) });
+      }
+    }
+    function activity() {
+      if (document.hidden) return;
+      if (location.pathname !== path) {
+        // Moved to another page in the site: the time so far belongs to the old one.
+        count(); send(); path = location.pathname;
+      } else count();
+    }
+    ["scroll", "pointerdown", "keydown", "touchstart", "wheel"].forEach(function (t) {
+      window.addEventListener(t, activity, { passive: true, capture: true });
+    });
+    var moved = 0;
+    window.addEventListener("mousemove", function () {
+      var now = Date.now();
+      if (now - moved > 5000) { moved = now; activity(); }
+    }, { passive: true });
+    window.addEventListener("popstate", activity);
+    var push = history.pushState;
+    history.pushState = function () {
+      var r = push.apply(this, arguments);
+      activity();
+      return r;
+    };
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) { if (lastAt) { count(); lastAt = 0; } send(); }
+      else { lastAt = Date.now(); if (location.pathname !== path) path = location.pathname; }
+    });
+    window.addEventListener("pagehide", function () {
+      if (lastAt) { count(); lastAt = 0; }
+      send();
+    });
+  } catch (e) {}
+})();
+  `.trim();
+
+  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+}
+
 function ServiceWorkerRegisterScript() {
   const code = `
 (function () {
@@ -111,6 +171,7 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
         <ThemeInitScript />
+        <ReadingTimeScript />
         <ServiceWorkerRegisterScript />
 
         {/* Structured data: NewsMediaOrganization for Google News */}
