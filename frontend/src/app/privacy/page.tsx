@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import GaChoice from "./GaChoice";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Regional Pulse News",
@@ -31,7 +32,7 @@ export default function PrivacyPage() {
       </h1>
 
       <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-        Last updated: October 22, 2026
+        Last updated: October 28, 2026
       </p>
 
       <section className="mt-8 space-y-6 text-base leading-relaxed text-gray-700 dark:text-gray-300">
@@ -103,6 +104,25 @@ export default function PrivacyPage() {
             .
           </li>
           <li>
+            <strong>Google Analytics:</strong> We also use Google Analytics to count visits, so we
+            can tell new visitors from returning ones. It uses a cookie for that, with advertising
+            features and Google signals switched off, and it receives the same kind of anonymous
+            data as Umami. In Europe (EU, UK, Switzerland) Google only sets that cookie if you tap
+            Allow on the prompt; otherwise it receives a cookie-free signal that a page was viewed.
+            If your browser asks sites not to track you, neither Umami nor Google Analytics counts
+            you.
+            <GaChoice /> See{" "}
+            <a
+              href="https://policies.google.com/privacy"
+              className="text-blue-600 underline dark:text-blue-400"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google&apos;s privacy policy
+            </a>
+            .
+          </li>
+          <li>
             <strong>Local storage:</strong> We store your theme preference (light/dark mode), region
             selection, and filter settings in your browser&apos;s local storage. If you subscribe,
             we also store a signed subscription token there so the site remembers you. This data
@@ -144,6 +164,9 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Umami</strong> for cookie-free, anonymous usage analytics
+          </li>
+          <li>
+            <strong>Google Analytics</strong> for visit counts (cookie in Europe only if you allow it)
           </li>
           <li>
             <strong>Formspree</strong> for feedback form processing

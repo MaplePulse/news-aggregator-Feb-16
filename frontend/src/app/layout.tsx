@@ -135,6 +135,90 @@ function ReadingTimeScript() {
   return <script dangerouslySetInnerHTML={{ __html: code }} />;
 }
 
+// Google Analytics beside Umami (the same snippet runs on all the owner's sites). Outside
+// Europe GA counts visits with its usual cookie, never ads data. In Europe (EEA, UK,
+// Switzerland, decided by Google from the IP) it sends cookieless pings only, unless the
+// visitor taps Allow on the prompt, which visitors on a European time zone see once.
+// Live site only; Do Not Track turns it off, like Umami. The choice can be changed on
+// /privacy (window.siteConsent).
+function GoogleAnalyticsScript() {
+  const code = `
+window.ANALYTICS_OFF = navigator.doNotTrack === '1' || window.doNotTrack === '1';
+(function () {
+  var GA_ID = 'G-E8VMKSTYET';
+  var LIVE = ['regionalpulsenews.com', 'www.regionalpulsenews.com'];
+  var PRIVACY_URL = '/privacy';
+  var AUTO_PROMPT = true;
+
+  var KEY = 'ga-consent';
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function () { dataLayer.push(arguments); };
+
+  var tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  var inEurope = /^(Europe\\/|Atlantic\\/(Canary|Madeira|Azores|Reykjavik|Faroe)|Arctic\\/Longyearbyen|Asia\\/(Nicosia|Famagusta))/.test(tz);
+  var read = function () { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+  var on = LIVE.indexOf(location.hostname) >= 0 && !window.ANALYTICS_OFF;
+
+  var promptEl = null;
+  window.siteConsent = {
+    inEurope: inEurope,
+    choice: read,
+    set: function (c) {
+      try { localStorage.setItem(KEY, c); } catch (e) {}
+      gtag('consent', 'update', {analytics_storage: c === 'granted' ? 'granted' : 'denied'});
+      if (promptEl) { promptEl.remove(); promptEl = null; }
+    },
+    showPrompt: function () {
+      if (!on || !inEurope || read() || promptEl) return;
+      var st = document.createElement('style');
+      st.textContent = '.gac-bar{position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483000;max-width:560px;margin:0 auto;' +
+        'background:#1f2933;color:#f5f7fa;border-radius:12px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.35);' +
+        'font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}' +
+        '.gac-bar a{color:#9fd3ff}.gac-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}' +
+        '.gac-bar button{font:inherit;font-weight:600;border-radius:8px;padding:8px 16px;cursor:pointer;border:1px solid #52606d;background:transparent;color:#f5f7fa}' +
+        '.gac-bar button.gac-yes{background:#f5f7fa;color:#1f2933;border-color:#f5f7fa}';
+      document.head.appendChild(st);
+      promptEl = document.createElement('div');
+      promptEl.className = 'gac-bar';
+      promptEl.setAttribute('role', 'dialog');
+      promptEl.setAttribute('aria-label', 'Visit counting');
+      promptEl.innerHTML = 'Can we count your visit with Google Analytics? It uses a cookie so we can tell new visitors ' +
+        'from returning ones. No ads, nothing personal. <a href="' + PRIVACY_URL + '">More</a>' +
+        '<div class="gac-btns"><button type="button" class="gac-no">No thanks</button>' +
+        '<button type="button" class="gac-yes">Allow</button></div>';
+      promptEl.querySelector('.gac-no').onclick = function () { siteConsent.set('denied'); };
+      promptEl.querySelector('.gac-yes').onclick = function () { siteConsent.set('granted'); };
+      document.body.appendChild(promptEl);
+    }
+  };
+  if (!on) return;
+
+  var EUROPE = ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL',
+    'PL','PT','RO','SK','SI','ES','SE','IS','LI','NO','GB','CH'];
+  var noAds = {ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'};
+  gtag('consent', 'default', Object.assign({analytics_storage: 'denied', region: EUROPE}, noAds));
+  gtag('consent', 'default', Object.assign({analytics_storage: 'granted'}, noAds));
+  var saved = read();
+  if (saved) gtag('consent', 'update', {analytics_storage: saved === 'granted' ? 'granted' : 'denied'});
+
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(s);
+  gtag('js', new Date());
+  gtag('config', GA_ID, {allow_google_signals: false, allow_ad_personalization_signals: false});
+
+  if (AUTO_PROMPT) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', siteConsent.showPrompt);
+    else siteConsent.showPrompt();
+  }
+})();
+  `.trim();
+
+  return <script dangerouslySetInnerHTML={{ __html: code }} />;
+}
+
 function ServiceWorkerRegisterScript() {
   const code = `
 (function () {
@@ -170,6 +254,7 @@ export default function RootLayout({
           data-do-not-track="true"
           strategy="afterInteractive"
         />
+        <GoogleAnalyticsScript />
         <ThemeInitScript />
         <ReadingTimeScript />
         <ServiceWorkerRegisterScript />
