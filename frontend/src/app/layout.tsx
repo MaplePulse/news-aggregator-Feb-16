@@ -165,8 +165,11 @@ window.ANALYTICS_OFF = navigator.doNotTrack === '1' || window.doNotTrack === '1'
     inEurope: inEurope,
     choice: read,
     set: function (c) {
+      var was = read();
       try { localStorage.setItem(KEY, c); } catch (e) {}
       gtag('consent', 'update', {analytics_storage: c === 'granted' ? 'granted' : 'denied'});
+      // The page view sent on arrival went out before the answer (cookie-free), so count this visit now
+      if (on && c === 'granted' && was !== 'granted') gtag('event', 'page_view');
       if (promptEl) { promptEl.remove(); promptEl = null; }
     },
     showPrompt: function () {
