@@ -2050,6 +2050,30 @@ DEFAULT_UA = (
 )
 
 
+# gc.collect() frees Python objects, but glibc keeps the freed pages instead of
+# returning them to the OS, so RSS creeps up until Render restarts the instance.
+# malloc_trim(0) hands that free memory back. No-op where glibc isn't available.
+try:
+    import ctypes
+    _malloc_trim = ctypes.CDLL("libc.so.6").malloc_trim
+except Exception:
+    _malloc_trim = None
+
+
+def _release_memory() -> None:
+    gc.collect()
+    if _malloc_trim is not None:
+        try:
+            _malloc_trim(0)
+        except Exception:
+            pass
+
+
+# Feeds larger than this are skipped (the biggest real feed is ~4 MB), so one
+# oversized response can't push the 512Mi container over its memory limit.
+_FEED_MAX_BYTES = int(os.getenv("FEED_MAX_BYTES", str(10 * 1024 * 1024)))
+
+
 # In-memory feed cache: avoids re-fetching the same RSS URL within a short window.
 # Stores only the fields we actually use from feedparser results to save memory.
 _FEED_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -2129,14 +2153,17 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            raw = resp.read()
-        
+            raw = resp.read(_FEED_MAX_BYTES + 1)
+        if len(raw) > _FEED_MAX_BYTES:
+            raise RuntimeError(f"feed larger than {_FEED_MAX_BYTES} bytes, skipped")
+
         # Decompress if gzip or brotli encoded
         content_encoding = resp.headers.get('Content-Encoding', '')
         if 'gzip' in content_encoding or (len(raw) > 2 and raw[:2] == b'\x1f\x8b'):
-            import gzip
+            import zlib
             try:
-                raw = gzip.decompress(raw)
+                # max_length stops a small compressed body expanding past the cap
+                raw = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(raw, _FEED_MAX_BYTES + 1)
             except Exception:
                 pass  # If decompression fails, try parsing as-is
         elif 'br' in content_encoding:
@@ -2145,7 +2172,9 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
                 raw = brotli.decompress(raw)
             except Exception:
                 pass  # If decompression fails, try parsing as-is
-        
+        if len(raw) > _FEED_MAX_BYTES:
+            raise RuntimeError(f"feed larger than {_FEED_MAX_BYTES} bytes once decompressed, skipped")
+
         parsed = feedparser.parse(raw)
         
         # Memory optimization: limit entries if requested
@@ -2176,7 +2205,7 @@ def _fetch_feed(feed_url: str, timeout_s: int = 12, custom_headers: Optional[Dic
                     items = sorted(_FEED_CACHE.items(), key=lambda kv: kv[1]["ts"])
                     for k, _v in items[:len(_FEED_CACHE) - _FEED_CACHE_MAX]:
                         _FEED_CACHE.pop(k, None)
-        gc.collect()
+        _release_memory()
         return _SlimFeed(slim_data)
     except urllib.error.URLError as e:
         raise RuntimeError(f"URL error: {e}")
@@ -3339,7 +3368,7 @@ def _cluster_items_v2(raw: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 }
             )
 
-    gc.collect()
+    _release_memory()
     return clusters_out
 
 
@@ -4145,6 +4174,8 @@ def healthz():
         # Lets the daily report confirm translations are kept across deploys.
         "cache_persistent": DB_PATH != _DEFAULT_DB_PATH,
         "cached_translations": cached_translations,
+        # True once freed memory is being handed back to the OS (Linux only).
+        "memory_trim": _malloc_trim is not None,
     }
 
 
@@ -4426,7 +4457,7 @@ def get_news(
     scan_cap = min(2000, max(200, lim * 10))
     items = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap)
     items = _dedupe(items)
-    gc.collect()
+    _release_memory()
 
     for a in items:
         a["cluster_id"] = _sig(a)
@@ -4495,7 +4526,7 @@ def get_clusters(
         it["rank_factors"] = factors
 
     clusters = _cluster_items_v2(raw)
-    gc.collect()
+    _release_memory()
 
     for cobj in clusters:
         cid = (cobj.get("cluster_id") or "").strip()
@@ -4608,7 +4639,7 @@ def get_top(
         it["rank_factors"] = factors
 
     clusters = _cluster_items_v2(raw)
-    gc.collect()
+    _release_memory()
 
     for cobj in clusters:
         cid = (cobj.get("cluster_id") or "").strip()
@@ -4709,7 +4740,7 @@ def get_cluster_by_id(cluster_id: str):
                 it["rank_factors"] = factors
 
             clusters = _cluster_items_v2(raw)
-            gc.collect()
+            _release_memory()
             for cobj in clusters:
                 if cobj.get("cluster_id") == cid:
                     best = cobj.get("best_item")
@@ -5265,7 +5296,7 @@ def _worker_loop() -> None:
                         # Brief pause between subdivisions to spread memory pressure
                         # Free intermediate objects from this subdivision
                         del items, clusters
-                        gc.collect()
+                        _release_memory()
 
                         _subdiv_stagger_s = _env_int("PRE_ENRICH_SUBDIV_STAGGER_S", 5)
                         if _subdiv_stagger_s > 0:
@@ -5286,7 +5317,7 @@ def _worker_loop() -> None:
                     stale_news = [k for k, v in _NEWS_CACHE.items() if (now_ts - float(v.get("ts", 0))) > news_ttl]
                     for k in stale_news:
                         _NEWS_CACHE.pop(k, None)
-                gc.collect()
+                _release_memory()
 
                 # Stagger regions: pause between each to keep peak memory lower
                 _region_stagger_s = _env_int("PRE_ENRICH_REGION_STAGGER_S", 30)
