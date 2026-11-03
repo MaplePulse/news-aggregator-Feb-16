@@ -4936,6 +4936,8 @@ _worker_last_ok_utc: Optional[str] = None
 _worker_last_error: Optional[str] = None
 _worker_last_stats: Optional[Dict[str, Any]] = None
 _worker_thread: Optional[threading.Thread] = None
+# Per region: which non-default subdivision the next pre-enrich cycle starts from.
+_worker_subdiv_cursor: Dict[str, int] = {}
 
 
 def _env_list(key: str, default_csv: str) -> List[str]:
@@ -5155,11 +5157,25 @@ def _worker_loop() -> None:
                     region_max = per_region_budget
 
                 region_subdivisions = [k for k in subdivisions if k in _valid_subdivision_keys_for_region(region_key)]
+
+                # The region's default page (what most visitors open) goes first but may use at
+                # most half the region's budget. The other subdivisions take turns: each cycle
+                # starts just after the one where the last cycle ran out of budget, so the ones
+                # late in the list (e.g. Chile, Peru, Cyprus, Turkey) aren't starved forever.
+                default_sub = _default_subdivision_for_region(region_key)
+                others = [k for k in region_subdivisions if k != default_sub]
+                rotate_start = _worker_subdiv_cursor.get(region_key, 0) % len(others) if others else 0
+                others = others[rotate_start:] + others[:rotate_start]
+                region_subdivisions = ([default_sub] if default_sub in region_subdivisions else []) + others
+                stats.setdefault("order", {})[region_key] = region_subdivisions
+                others_visited = 0
                 region_queued = 0
 
                 for subdivision_key in region_subdivisions:
                     if subdivision_key not in _valid_subdivision_keys_for_region(region_key):
                         continue
+                    if subdivision_key != default_sub:
+                        others_visited += 1
 
                     for r in ranges:
                         bucket_key = f"{region_key}:{subdivision_key}:{r}"
@@ -5227,6 +5243,8 @@ def _worker_loop() -> None:
                         if candidates:
                             remaining = max(0, region_max - region_queued)
                             take = min(max_new_per_bucket, remaining)
+                            if subdivision_key == default_sub:
+                                take = min(take, max(1, region_max // 2))
                             candidates = candidates[:take]
                         else:
                             candidates = []
@@ -5304,6 +5322,8 @@ def _worker_loop() -> None:
 
                     if region_queued >= region_max:
                         break
+                if others:
+                    _worker_subdiv_cursor[region_key] = (rotate_start + others_visited) % len(others)
                 # Free intermediate objects from this region before starting the next
                 # Also flush stale entries from in-memory caches
                 now_ts = time.time()
