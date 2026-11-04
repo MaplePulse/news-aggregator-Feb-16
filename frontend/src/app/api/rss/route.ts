@@ -16,7 +16,12 @@ import { verifySubscriberToken } from "@/lib/signing";
 
 const SITE_URL = "https://regionalpulsenews.com";
 const ALL_REGIONS = ["south-america", "mexico", "central-america", "europe"];
-const FETCH_TIMEOUT_MS = 8000;
+// A region's headlines take 10-20s when the backend has to build them fresh;
+// 8s was too short and left subscribers with empty or partial feeds.
+const FETCH_TIMEOUT_MS = 30000;
+
+// Let this route run long enough for the slowest region (all are fetched in parallel).
+export const maxDuration = 60;
 
 const REGION_NAMES: Record<string, string> = {
   "south-america": "South America",

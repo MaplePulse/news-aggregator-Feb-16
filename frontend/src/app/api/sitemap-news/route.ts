@@ -14,7 +14,12 @@ import { NextResponse } from "next/server";
 
 const SITE_URL = "https://regionalpulsenews.com";
 const REGIONS = ["south-america", "mexico", "central-america", "europe"];
-const FETCH_TIMEOUT_MS = 8000;
+// A region's headlines take 10-20s when the backend has to build them fresh.
+// The old 8s limit meant most regions gave up and the sitemap came back empty.
+const FETCH_TIMEOUT_MS = 30000;
+
+// Let this route run long enough for the slowest region (all are fetched in parallel).
+export const maxDuration = 60;
 
 type BackendItem = {
   title: string;
@@ -95,6 +100,15 @@ export async function GET(request: Request) {
   </url>`);
     }
   });
+
+  // Nothing came back (backend down or redeploying): don't let Vercel cache an empty
+  // sitemap for the next 45 minutes. A 503 tells Google to try again later.
+  if (entries.length === 0) {
+    return new NextResponse("News sitemap temporarily unavailable", {
+      status: 503,
+      headers: { "Retry-After": "300", "Cache-Control": "no-store" },
+    });
+  }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
