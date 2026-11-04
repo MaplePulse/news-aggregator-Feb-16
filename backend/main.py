@@ -2966,6 +2966,7 @@ _SHOPPING_PATH_SEGMENTS = {
     "codigo-promocional",
     "cupones",
     "offerte",
+    "guia-de-compras",     # G1 (BR) shopping guide
 }
 
 _SHOPPING_TITLE_RE = re.compile(
@@ -2991,6 +2992,34 @@ def _is_shopping_promo(link: str, title: str) -> bool:
 
 
 # ----------------------------
+# Routine forecast filter
+# ----------------------------
+# G1 (BR) publishes an automatic "Previsão do tempo hoje para <city> (UF)" post
+# for dozens of cities every night. They aren't news, crowd real stories off
+# Brazil's page and use up translation budget. They live in G1's
+# /previsao-do-tempo/ section; real weather news (storm warnings etc.) is
+# published under the normal news section and is kept.
+_FORECAST_PATH_SEGMENTS = {"previsao-do-tempo"}
+
+_FORECAST_TITLE_RE = re.compile(
+    r"^previs[aã]o do tempo (hoje |amanh[aã] )?para .+\([A-Z]{2}\)",
+    re.IGNORECASE,
+)
+
+
+def _is_routine_forecast(link: str, title: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+
+        segments = {s.lower() for s in urlparse(link).path.split("/") if s}
+    except Exception:
+        segments = set()
+    if segments & _FORECAST_PATH_SEGMENTS:
+        return True
+    return bool(_FORECAST_TITLE_RE.search(title or ""))
+
+
+# ----------------------------
 # Article builder
 # ----------------------------
 def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2998,7 +3027,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
     title = (entry.get("title") or "").strip()
     if not link or not title:
         return None
-    if _is_shopping_promo(link, title):
+    if _is_shopping_promo(link, title) or _is_routine_forecast(link, title):
         return None
 
     published_dt = _parse_date(entry)
