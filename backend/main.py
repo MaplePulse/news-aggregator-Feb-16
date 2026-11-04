@@ -2966,6 +2966,7 @@ _SHOPPING_PATH_SEGMENTS = {
     "codigo-promocional",
     "cupones",
     "offerte",
+    "guia-de-compras",     # G1 (BR) shopping guide
 }
 
 _SHOPPING_TITLE_RE = re.compile(
@@ -2991,6 +2992,34 @@ def _is_shopping_promo(link: str, title: str) -> bool:
 
 
 # ----------------------------
+# Routine forecast filter
+# ----------------------------
+# G1 (BR) publishes an automatic "Previsão do tempo hoje para <city> (UF)" post
+# for dozens of cities every night. They aren't news, crowd real stories off
+# Brazil's page and use up translation budget. They live in G1's
+# /previsao-do-tempo/ section; real weather news (storm warnings etc.) is
+# published under the normal news section and is kept.
+_FORECAST_PATH_SEGMENTS = {"previsao-do-tempo"}
+
+_FORECAST_TITLE_RE = re.compile(
+    r"^previs[aã]o do tempo (hoje |amanh[aã] )?para .+\([A-Z]{2}\)",
+    re.IGNORECASE,
+)
+
+
+def _is_routine_forecast(link: str, title: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+
+        segments = {s.lower() for s in urlparse(link).path.split("/") if s}
+    except Exception:
+        segments = set()
+    if segments & _FORECAST_PATH_SEGMENTS:
+        return True
+    return bool(_FORECAST_TITLE_RE.search(title or ""))
+
+
+# ----------------------------
 # Article builder
 # ----------------------------
 def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -2998,7 +3027,7 @@ def _build_article(source: Dict[str, Any], entry: Dict[str, Any]) -> Optional[Di
     title = (entry.get("title") or "").strip()
     if not link or not title:
         return None
-    if _is_shopping_promo(link, title):
+    if _is_shopping_promo(link, title) or _is_routine_forecast(link, title):
         return None
 
     published_dt = _parse_date(entry)
@@ -4938,6 +4967,8 @@ _worker_last_stats: Optional[Dict[str, Any]] = None
 _worker_thread: Optional[threading.Thread] = None
 # Per region: which non-default subdivision the next pre-enrich cycle starts from.
 _worker_subdiv_cursor: Dict[str, int] = {}
+# Per region: how many headlines it queued for translation last cycle (its recent demand).
+_worker_region_demand: Dict[str, int] = {}
 
 
 def _env_list(key: str, default_csv: str) -> List[str]:
@@ -5145,16 +5176,20 @@ def _worker_loop() -> None:
                 if rk in LIVE_REGION_KEYS:
                     active_regions.append(rk)
 
-            n_active = max(1, len(active_regions))
-            # Each region gets an equal slice; any leftover goes to the last region.
-            per_region_budget = max(1, max_new_total // n_active)
+            # Regions that needed least last cycle go first, and each region gets an equal
+            # share of whatever budget is still left. So when Mexico and Central America are
+            # already translated, their unused share passes on to the busier regions (South
+            # America, Europe) instead of being wasted. Ties keep the configured order.
+            active_regions.sort(key=lambda rk: _worker_region_demand.get(rk, 0))
+            stats["region_order"] = list(active_regions)
+            stats["region_budget"] = {}
 
             for region_idx, region_key in enumerate(active_regions):
-                # Last region may absorb the remainder due to integer division
+                regions_left = len(active_regions) - region_idx
+                region_max = max(0, max_new_total - total_queued) // regions_left
                 if region_idx == len(active_regions) - 1:
-                    region_max = max_new_total - total_queued
-                else:
-                    region_max = per_region_budget
+                    region_max = max(0, max_new_total - total_queued)
+                stats["region_budget"][region_key] = region_max
 
                 region_subdivisions = [k for k in subdivisions if k in _valid_subdivision_keys_for_region(region_key)]
 
@@ -5256,11 +5291,12 @@ def _worker_loop() -> None:
                         if candidates:
                             for i in range(0, len(candidates), max(1, batch_size)):
                                 chunk = candidates[i: i + max(1, batch_size)]
+                                # candidates is already capped to the region's budget, so
+                                # translate them all (breaking early here used to drop
+                                # everything after the first batch of 10).
                                 ecount = _enrich_internal_clusters(chunk)
                                 bucket_enriched += ecount
                                 total_enriched += ecount
-                                if region_queued >= region_max:
-                                    break
 
                         stats["buckets"][bucket_key] = {
                             "scanned": bucket_scanned,
@@ -5324,6 +5360,7 @@ def _worker_loop() -> None:
                         break
                 if others:
                     _worker_subdiv_cursor[region_key] = (rotate_start + others_visited) % len(others)
+                _worker_region_demand[region_key] = region_queued
                 # Free intermediate objects from this region before starting the next
                 # Also flush stale entries from in-memory caches
                 now_ts = time.time()

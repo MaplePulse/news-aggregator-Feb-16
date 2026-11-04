@@ -163,8 +163,11 @@ export async function GET(request: Request) {
     for (const c of clusters) {
       const item = c.best_item;
       if (!item?.title) continue;
+      // Not translated yet: leave it out rather than show the original language.
+      // It joins the feed once the translator has done it.
+      if (!item.title_en?.trim()) continue;
 
-      const title = item.title_en || item.title;
+      const title = item.title_en;
       const slug = title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")

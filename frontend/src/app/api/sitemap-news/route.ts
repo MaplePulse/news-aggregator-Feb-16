@@ -71,10 +71,13 @@ export async function GET(request: Request) {
     for (const c of results[i]) {
       const item = c.best_item;
       if (!item?.link || !item?.title) continue;
+      // Not translated yet: leave it out so Google never indexes a non-English title
+      // (the sitemap says <news:language>en</news:language>). It's added once translated.
+      if (!item.title_en?.trim()) continue;
       if (seen.has(item.link)) continue;
       seen.add(item.link);
 
-      const title = item.title_en || item.title;
+      const title = item.title_en;
       const pubDate = item.published_utc || new Date().toISOString();
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
       const loc = `${SITE_URL}/article/${encodeURIComponent(region)}/${encodeURIComponent(c.cluster_id)}/${slug}`;
