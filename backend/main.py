@@ -4369,7 +4369,7 @@ def get_uruguay_news(range: str = "24h", q: str = "", limit: int = 50):
 
 
 def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: int = 999999, source_ids: Optional[set] = None) -> List[Dict[str, Any]]:
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor
 
     r = _require_live_region(region)
     s_key = _normalize_subdivision_for_region(r, subdivision)
@@ -4413,12 +4413,13 @@ def _collect_items(region: str, subdivision: str, range: str, q: str, scan_cap: 
         except Exception:
             return (source, None)
 
-    feed_results = []
     # Reduce default workers from 5 to 2 to lower peak memory on 512Mi containers
     with ThreadPoolExecutor(max_workers=min(_env_int("FEED_FETCH_MAX_WORKERS", 2), max(1, len(matched_sources)))) as pool:
-        futures = {pool.submit(_fetch_source, s): s for s in matched_sources}
-        for future in as_completed(futures):
-            feed_results.append(future.result())
+        futures = [pool.submit(_fetch_source, s) for s in matched_sources]
+        # Read the feeds in their configured order, not the order they finished downloading.
+        # scan_cap cuts the list off, so finish order made the same page pick different
+        # headlines from one request to the next.
+        feed_results = [f.result() for f in futures]
 
     # Process fetched feeds into articles
     items: List[Dict[str, Any]] = []
@@ -4619,6 +4620,64 @@ def get_sources(region: str = DEFAULT_REGION_KEY):
     return {"region": r, "sources": result}
 
 
+def _build_top_clusters(
+    region_key: str,
+    subdivision_key: str,
+    range: str,
+    q: str,
+    lim: int,
+    source_ids: Optional[set] = None,
+) -> List[Dict[str, Any]]:
+    """The stories a /top page shows, best first, with any saved translations attached.
+
+    The page (/top) and the background translator both call this, so they always agree
+    on which stories are on a page and what each story's cluster_id is. When they built
+    the list differently, the translator could translate a story under one id while the
+    page showed it under another, leaving it grey for hours.
+    """
+    scan_cap = min(3000, max(300, lim * 14))
+    raw = _collect_items(region=region_key, subdivision=subdivision_key, range=range, q=q, scan_cap=scan_cap, source_ids=source_ids)
+
+    for it in raw:
+        it["topic"] = _topic_label(it)
+        score, factors = _rank_score_and_factors(it)
+        it["rank_score"] = score
+        it["rank_factors"] = factors
+
+    clusters = _cluster_items_v2(raw)
+    del raw
+    _release_memory()
+
+    for cobj in clusters:
+        cid = (cobj.get("cluster_id") or "").strip()
+        best = cobj.get("best_item")
+        if not isinstance(best, dict):
+            continue
+
+        cached_cluster = _get_fresh_cluster_enrich(cid)
+        if cached_cluster:
+            best["title_en"] = cached_cluster.get("title_en") or ""
+            best["summary_en"] = cached_cluster.get("summary_en") or ""
+            best["ai_category"] = cached_cluster.get("ai_category") or ""
+            best["has_cached_summary"] = True
+
+        cscore, cfactors = _cluster_rank_score_and_factors(cobj, subdivision_context=subdivision_key)
+        cobj["cluster_rank_score"] = cscore
+        cobj["cluster_rank_factors"] = cfactors
+        best["cluster_rank_score"] = cscore
+
+        cobj["best_item"] = _strip_internal_fields(best)
+
+    clusters.sort(
+        key=lambda cobj: (
+            float(cobj.get("cluster_rank_score") or 0.0),
+            ((cobj.get("best_item") or {}).get("published_utc") or ""),
+        ),
+        reverse=True,
+    )
+    return clusters[:lim]
+
+
 @app.get("/top")
 def get_top(
     region: str = DEFAULT_REGION_KEY,
@@ -4658,47 +4717,7 @@ def get_top(
         payload = _strip_internal_fields(payload)
         return payload
 
-    scan_cap = min(3000, max(300, lim * 14))
-    raw = _collect_items(region=r, subdivision=selected_subdivision, range=range, q=q, scan_cap=scan_cap, source_ids=source_ids if source_ids else None)
-
-    for it in raw:
-        it["topic"] = _topic_label(it)
-        score, factors = _rank_score_and_factors(it)
-        it["rank_score"] = score
-        it["rank_factors"] = factors
-
-    clusters = _cluster_items_v2(raw)
-    _release_memory()
-
-    for cobj in clusters:
-        cid = (cobj.get("cluster_id") or "").strip()
-        best = cobj.get("best_item")
-        if not isinstance(best, dict):
-            continue
-
-        cached_cluster = _get_fresh_cluster_enrich(cid)
-        if cached_cluster:
-            best["title_en"] = cached_cluster.get("title_en") or ""
-            best["summary_en"] = cached_cluster.get("summary_en") or ""
-            best["ai_category"] = cached_cluster.get("ai_category") or ""
-            best["has_cached_summary"] = True
-
-        cscore, cfactors = _cluster_rank_score_and_factors(cobj, subdivision_context=selected_subdivision)
-        cobj["cluster_rank_score"] = cscore
-        cobj["cluster_rank_factors"] = cfactors
-        best["cluster_rank_score"] = cscore
-
-        cobj["best_item"] = _strip_internal_fields(best)
-
-    clusters.sort(
-        key=lambda cobj: (
-            float(cobj.get("cluster_rank_score") or 0.0),
-            ((cobj.get("best_item") or {}).get("published_utc") or ""),
-        ),
-        reverse=True,
-    )
-
-    clusters = clusters[:lim]
+    clusters = _build_top_clusters(r, selected_subdivision, range, q, lim, source_ids=source_ids or None)
     payload = {
         "region": r,
         "subdivision_label": _region_subdivision_label(r),
@@ -5219,36 +5238,11 @@ def _worker_loop() -> None:
                         bucket_queued = 0
                         bucket_enriched = 0
 
-                        effective_scan_limit = int(scan_limit)
-
-                        scan_cap = max(150, int(effective_scan_limit) * 10)
-                        items = _collect_items(region=region_key, subdivision=subdivision_key, range=r, q="", scan_cap=scan_cap)
-                        items = _dedupe(items)
-
-                        for a in items:
-                            a["topic"] = _topic_label(a)
-                            score, _factors = _rank_score_and_factors(a)
-                            a["rank_score"] = score
-
-                        items.sort(
-                            key=lambda a: (float(a.get("rank_score") or 0.0), a.get("published_utc") or ""),
-                            reverse=True,
-                        )
-
-                        clusters = _cluster_items_v2(items[: max(80, effective_scan_limit * 4)])
-                        for cobj in clusters:
-                            cscore, cfactors = _cluster_rank_score_and_factors(cobj, subdivision_context=subdivision_key)
-                            cobj["cluster_rank_score"] = cscore
-                            cobj["cluster_rank_factors"] = cfactors
-
-                        clusters.sort(
-                            key=lambda cobj: (
-                                float(cobj.get("cluster_rank_score") or 0.0),
-                                ((cobj.get("best_item") or {}).get("published_utc") or ""),
-                            ),
-                            reverse=True,
-                        )
-                        top_clusters = clusters[: int(effective_scan_limit)]
+                        # Build the page exactly as visitors get it (the site asks for the
+                        # top 30), so the stories translated here are the ones shown there.
+                        page_limit = _hard_cap_limit(region_key, subdivision_key, 30)
+                        clusters = _build_top_clusters(region_key, subdivision_key, r, "", page_limit)
+                        top_clusters = clusters[: int(scan_limit)]
                         bucket_scanned = len(top_clusters)
 
                         candidates: List[Dict[str, str]] = []
@@ -5312,7 +5306,7 @@ def _worker_loop() -> None:
                         # payload shape that /top returns, and write it
                         # to top_cache so the next user request is instant.
                         try:
-                            warm_limit = _hard_cap_limit(region_key, subdivision_key, 30)
+                            warm_limit = page_limit
                             warm_clusters = clusters[: warm_limit]
                             for wc in warm_clusters:
                                 wc_best = wc.get("best_item")
@@ -5349,7 +5343,7 @@ def _worker_loop() -> None:
 
                         # Brief pause between subdivisions to spread memory pressure
                         # Free intermediate objects from this subdivision
-                        del items, clusters
+                        del clusters
                         _release_memory()
 
                         _subdiv_stagger_s = _env_int("PRE_ENRICH_SUBDIV_STAGGER_S", 5)
