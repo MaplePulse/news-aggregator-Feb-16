@@ -1894,8 +1894,40 @@ def _parse_date(entry: Dict[str, Any]) -> Optional[datetime]:
                     return datetime(*parsed[:6], tzinfo=timezone.utc)
             except Exception:
                 pass
+            # Some feeds (UOL) write the date in Portuguese, e.g. "Seg, 09 Nov 2026 04:00:00 -0300",
+            # which feedparser can't read, so every story came out undated.
+            parsed_local = _parse_localized_rfc822(val)
+            if parsed_local:
+                return parsed_local
 
     return None
+
+
+# Portuguese and Spanish month abbreviations -> English (only the ones that differ).
+_LOCAL_MONTHS = {
+    "fev": "Feb", "abr": "Apr", "mai": "May", "ago": "Aug", "set": "Sep", "sept": "Sep",
+    "out": "Oct", "dez": "Dec", "ene": "Jan", "dic": "Dec",
+}
+
+
+def _parse_localized_rfc822(val: str) -> Optional[datetime]:
+    """Read an RSS date whose day/month names are in Portuguese or Spanish."""
+    s = re.sub(r"^[^\d,]{2,12},\s*", "", val.strip())  # drop the weekday ("Seg, ", "Lun, ", "Sáb, ")
+    parts = s.split()
+    if len(parts) < 4:
+        return None
+    month = parts[1].rstrip(".").lower()
+    parts[1] = _LOCAL_MONTHS.get(month, month.capitalize())
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(" ".join(parts))
+    except Exception:
+        return None
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _matches_q(article: Dict[str, Any], q: str) -> bool:
