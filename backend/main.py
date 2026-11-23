@@ -4194,6 +4194,208 @@ def _get_openai_client(base_url: Optional[str] = None, api_key: Optional[str] = 
 
 
 # ----------------------------
+# Headline translation
+# ----------------------------
+# Claude (Anthropic API) translates when ANTHROPIC_API_KEY is set; otherwise the
+# old Venice/OpenAI path above is used, so deploying without the key changes nothing.
+# Claude Haiku 5.5 was chosen in a backtest on 176 real headlines in 8 languages
+# (Nov 2026): better than Venice and about $12/month at ~3,100 headlines a day.
+CLAUDE_TRANSLATE_MODEL_DEFAULT = "claude-haiku-5-5"
+
+_anthropic_client = None
+_anthropic_client_lock = threading.Lock()
+_translator_stats_lock = threading.Lock()
+_translator_stats: Dict[str, Any] = {
+    "since_utc": None, "calls": 0, "failed_calls": 0, "headlines": 0,
+    "input_tokens": 0, "output_tokens": 0, "last_error": None, "last_error_utc": None,
+}
+
+
+def _translate_provider() -> str:
+    return "claude" if (os.getenv("ANTHROPIC_API_KEY") or "").strip() else "legacy"
+
+
+def _get_anthropic_client():
+    global _anthropic_client
+    with _anthropic_client_lock:
+        if _anthropic_client is None:
+            import anthropic  # type: ignore
+
+            _anthropic_client = anthropic.Anthropic(
+                api_key=(os.getenv("ANTHROPIC_API_KEY") or "").strip(),
+                timeout=90.0,
+                max_retries=2,  # retries 429/5xx/overloaded with backoff
+            )
+        return _anthropic_client
+
+
+def _translator_note(ok: bool, headlines: int = 0, usage: Any = None, error: Optional[str] = None) -> None:
+    with _translator_stats_lock:
+        s = _translator_stats
+        if not s["since_utc"]:
+            s["since_utc"] = _now_utc_iso()
+        s["calls"] += 1
+        if ok:
+            s["headlines"] += headlines
+        else:
+            s["failed_calls"] += 1
+            s["last_error"] = (error or "")[:300]
+            s["last_error_utc"] = _now_utc_iso()
+        if usage is not None:
+            s["input_tokens"] += int(getattr(usage, "input_tokens", 0) or 0)
+            s["output_tokens"] += int(getattr(usage, "output_tokens", 0) or 0)
+
+
+def _translator_status() -> Dict[str, Any]:
+    provider = _translate_provider()
+    with _translator_stats_lock:
+        out = dict(_translator_stats)
+    out["provider"] = provider
+    out["model"] = (
+        (os.getenv("CLAUDE_TRANSLATE_MODEL") or CLAUDE_TRANSLATE_MODEL_DEFAULT).strip()
+        if provider == "claude"
+        else (os.getenv("DEFAULT_VENICE_MODEL") or os.getenv("OPENAI_MODEL") or "").strip()
+    )
+    return out
+
+
+def _translate_system_prompt(categories: List[str]) -> str:
+    return (
+        "You translate news headlines into English, write a short English summary, "
+        "and classify each article into exactly one category.\n"
+        "Return STRICT JSON only.\n"
+        "Output shape:\n"
+        '{ "items": [ {"id": "...", "title_en": "...", "summary_en": "...", "category": "..."}, ... ] }\n'
+        "Rules:\n"
+        "- Return one entry per input item, with the item's id copied exactly.\n"
+        "- title_en: natural English headline.\n"
+        "- summary_en: 1–2 sentences, neutral, based ONLY on provided title + snippet.\n"
+        "- If snippet is empty/uninformative: say so briefly.\n"
+        f"- category: exactly one of: {', '.join(categories)}\n"
+        "- Choose category based on actual article content, NOT the source's own label.\n"
+        "- No HTML, no markdown, no backticks.\n"
+    )
+
+
+def _translate_headlines(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Translate one batch of headlines.
+
+    items: dicts with link, source, title, snippet (snippet already cleaned).
+    Returns one dict per input item, in the same order, with title_en,
+    summary_en and category ("" where the model gave nothing or an unknown
+    category). Raises on an API or parsing failure.
+
+    Each headline is sent with a short id ("1", "2", ...) and matched back by
+    that id, not by its web address, which models sometimes alter.
+    """
+    from ai import VALID_CATEGORIES
+
+    if not items:
+        return []
+    payload = [
+        {
+            "id": str(n),
+            "link": (it.get("link") or "").strip(),
+            "source": (it.get("source") or "").strip(),
+            "title": (it.get("title") or "").strip(),
+            "snippet": (it.get("snippet") or "").strip(),
+        }
+        for n, it in enumerate(items, start=1)
+    ]
+    system = _translate_system_prompt(VALID_CATEGORIES)
+
+    if _translate_provider() == "claude":
+        model = (os.getenv("CLAUDE_TRANSLATE_MODEL") or CLAUDE_TRANSLATE_MODEL_DEFAULT).strip()
+        effort = (os.getenv("CLAUDE_TRANSLATE_EFFORT") or "low").strip()
+        schema = {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "title_en": {"type": "string"},
+                            "summary_en": {"type": "string"},
+                            "category": {"type": "string", "enum": list(VALID_CATEGORIES)},
+                        },
+                        "required": ["id", "title_en", "summary_en", "category"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": False,
+        }
+        usage = None
+        try:
+            resp = _get_anthropic_client().messages.create(
+                model=model,
+                max_tokens=8000,
+                system=system,
+                messages=[{"role": "user", "content": json.dumps({"items": payload}, ensure_ascii=False)}],
+                thinking={"type": "adaptive"},
+                output_config={"effort": effort, "format": {"type": "json_schema", "schema": schema}},
+            )
+            usage = getattr(resp, "usage", None)
+            if resp.stop_reason not in ("end_turn", "stop_sequence"):
+                raise RuntimeError(f"Claude stopped early ({resp.stop_reason})")
+            text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+            data = json.loads(text)
+        except Exception as e:
+            _translator_note(False, usage=usage, error=f"{type(e).__name__}: {e}")
+            raise
+    else:
+        client = _get_openai_client()
+        use_venice = (os.getenv("USE_VENICE") or "").strip().lower() in ("1", "true", "yes")
+        if use_venice:
+            model = (os.getenv("DEFAULT_VENICE_MODEL") or "mistral-small-3-2-24b-instruct").strip()
+        else:
+            model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
+        usage = None
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": json.dumps({"items": payload})},
+                ],
+                response_format={"type": "json_object"},
+            )
+            data = json.loads((resp.choices[0].message.content or "").strip())
+        except Exception as e:
+            _translator_note(False, error=f"{type(e).__name__}: {e}")
+            raise
+
+    valid_lower = {c.lower(): c for c in VALID_CATEGORIES}
+    by_id: Dict[str, Dict[str, Any]] = {}
+    by_link: Dict[str, Dict[str, Any]] = {}
+    for obj in (data.get("items") or []) if isinstance(data, dict) else []:
+        if not isinstance(obj, dict):
+            continue
+        oid = str(obj.get("id") or "").strip()
+        if oid and oid not in by_id:
+            by_id[oid] = obj
+        olink = str(obj.get("link") or "").strip()
+        if olink and olink not in by_link:
+            by_link[olink] = obj
+
+    out: List[Dict[str, str]] = []
+    done = 0
+    for p in payload:
+        obj = by_id.get(p["id"]) or by_link.get(p["link"]) or {}
+        title_en = str(obj.get("title_en") or "").strip()
+        summary_en = str(obj.get("summary_en") or "").strip()
+        category = valid_lower.get(str(obj.get("category") or "").strip().lower(), "")
+        if title_en and summary_en:
+            done += 1
+        out.append({"title_en": title_en, "summary_en": summary_en, "category": category})
+    _translator_note(True, headlines=done, usage=usage)
+    return out
+
+
+# ----------------------------
 # API Models
 # ----------------------------
 class EnrichItem(BaseModel):
@@ -4918,83 +5120,30 @@ def enrich_items(req: EnrichRequest, request: Request):
     if not to_do:
         return {"items": cached_out}
 
-    client = _get_openai_client()
-    use_venice = (os.getenv("USE_VENICE") or "").strip().lower() in ("1", "true", "yes")
-    if use_venice:
-        model = (os.getenv("DEFAULT_VENICE_MODEL") or "mistral-small-3-2-24b-instruct").strip()
-    else:
-        model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
-
-    payload = []
-    for it in to_do:
-        payload.append(
-            {
-                "link": (it.link or "").strip(),
-                "source": (it.source or "").strip(),
-                "title": (it.title or "").strip(),
-                "snippet": _clean_text_any((it.snippet or "").strip(), max_chars=700),
-                "cluster_id": (it.cluster_id or "").strip(),
-            }
-        )
-
-    from ai import VALID_CATEGORIES
-    categories_str = ", ".join(VALID_CATEGORIES)
-
-    system = (
-        "You translate news headlines into English, write a short English summary, "
-        "and classify each article into exactly one category.\n"
-        "Return STRICT JSON only.\n"
-        "Output shape:\n"
-        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "...", "category": "..."}, ... ] }\n'
-        "Rules:\n"
-        "- title_en: natural English headline.\n"
-        "- summary_en: 1–2 sentences, neutral, based ONLY on provided title + snippet.\n"
-        "- If snippet is empty/uninformative: say so briefly.\n"
-        f"- category: exactly one of: {categories_str}\n"
-        "- Choose category based on actual article content, NOT the source's own label.\n"
-        "- No HTML, no markdown, no backticks.\n"
-    )
-
+    batch = [
+        {
+            "link": (it.link or "").strip(),
+            "source": (it.source or "").strip(),
+            "title": (it.title or "").strip(),
+            "snippet": _clean_text_any((it.snippet or "").strip(), max_chars=700),
+        }
+        for it in to_do
+    ]
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps({"items": payload})},
-            ],
-            response_format={"type": "json_object"},
-        )
-        content = (resp.choices[0].message.content or "").strip()
-        data = json.loads(content)
+        results = _translate_headlines(batch)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Enrichment failed: {e}")
 
-    valid_cats_lower = {c.lower() for c in VALID_CATEGORIES}
-
-    link_to_cid: Dict[str, str] = {}
-    for it in req.items:
-        lnk = (it.link or "").strip()
-        cid = (it.cluster_id or "").strip()
-        if lnk and cid and lnk not in link_to_cid:
-            link_to_cid[lnk] = cid
-
     out_items = []
-    for obj in (data.get("items") or []):
-        link = (obj.get("link") or "").strip()
-        title_en = (obj.get("title_en") or "").strip()
-        summary_en = (obj.get("summary_en") or "").strip()
-        ai_category = (obj.get("category") or "").strip()
+    for it, res in zip(to_do, results):
+        link = (it.link or "").strip()
+        cid = (it.cluster_id or "").strip()
+        title_en, summary_en, ai_category = res["title_en"], res["summary_en"], res["category"]
         if not link:
             continue
 
-        # Validate category
-        if ai_category.lower() not in valid_cats_lower:
-            ai_category = ""
-
         if title_en and summary_en:
             _set_cached_enrich(link, title_en, summary_en, ai_category=ai_category)
-
-            cid = link_to_cid.get(link) or ""
             if cid:
                 try:
                     _set_cached_cluster_enrich(cid, title_en, summary_en, ai_category=ai_category)
@@ -5059,83 +5208,33 @@ def _enrich_internal_clusters(items: List[Dict[str, str]]) -> int:
     if not todo:
         return 0
 
-    client = _get_openai_client()
-    use_venice = (os.getenv("USE_VENICE") or "").strip().lower() in ("1", "true", "yes")
-    if use_venice:
-        model = (os.getenv("DEFAULT_VENICE_MODEL") or "mistral-small-3-2-24b-instruct").strip()
-    else:
-        model = (os.getenv("OPENAI_MODEL") or "gpt-4o-mini").strip()
-
-    from ai import VALID_CATEGORIES
-    categories_str = ", ".join(VALID_CATEGORIES)
-
-    system = (
-        "You translate news headlines into English, write a short English summary, "
-        "and classify each article into exactly one category.\n"
-        "Return STRICT JSON only.\n"
-        "Output shape:\n"
-        '{ "items": [ {"link": "...", "title_en": "...", "summary_en": "...", "category": "..."}, ... ] }\n'
-        "Rules:\n"
-        "- title_en: natural English headline.\n"
-        "- summary_en: 1–2 sentences, neutral, based ONLY on provided title + snippet.\n"
-        "- If snippet is empty/uninformative: say so briefly.\n"
-        f"- category: exactly one of: {categories_str}\n"
-        "- Choose category based on actual article content, NOT the source's own label.\n"
-        "- No HTML, no markdown, no backticks.\n"
-    )
-
-    payload = []
-    link_to_cid: Dict[str, str] = {}
-    for it in todo:
-        link = (it.get("link") or "").strip()
-        cid = (it.get("cluster_id") or "").strip()
-        if link and cid and link not in link_to_cid:
-            link_to_cid[link] = cid
-
-        payload.append(
-            {
-                "link": link,
-                "source": (it.get("source") or "").strip(),
-                "title": (it.get("title") or "").strip(),
-                "snippet": _clean_text_any((it.get("snippet") or "").strip(), max_chars=700),
-                "cluster_id": cid,
-            }
-        )
-
+    batch = [
+        {
+            "link": (it.get("link") or "").strip(),
+            "source": (it.get("source") or "").strip(),
+            "title": (it.get("title") or "").strip(),
+            "snippet": _clean_text_any((it.get("snippet") or "").strip(), max_chars=700),
+        }
+        for it in todo
+    ]
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps({"items": payload})},
-            ],
-            response_format={"type": "json_object"},
-        )
-        content = (resp.choices[0].message.content or "").strip()
-        data = json.loads(content)
+        results = _translate_headlines(batch)
     except Exception:
-        return 0
-
-    valid_cats_lower = {c.lower() for c in VALID_CATEGORIES}
+        return 0  # the reason is kept in /worker-status -> translator.last_error
 
     enriched = 0
-    for obj in (data.get("items") or []):
-        link = (obj.get("link") or "").strip()
-        title_en = (obj.get("title_en") or "").strip()
-        summary_en = (obj.get("summary_en") or "").strip()
-        ai_category = (obj.get("category") or "").strip()
+    for it, res in zip(todo, results):
+        link = (it.get("link") or "").strip()
+        cid = (it.get("cluster_id") or "").strip()
+        title_en, summary_en, ai_category = res["title_en"], res["summary_en"], res["category"]
         if not link or not title_en or not summary_en:
             continue
-
-        if ai_category.lower() not in valid_cats_lower:
-            ai_category = ""
 
         try:
             _set_cached_enrich(link, title_en, summary_en, ai_category=ai_category)
         except Exception:
             pass
 
-        cid = link_to_cid.get(link) or ""
         if cid:
             try:
                 _set_cached_cluster_enrich(cid, title_en, summary_en, ai_category=ai_category)
@@ -5438,6 +5537,7 @@ def worker_status():
             "last_ok_utc": _worker_last_ok_utc,
             "last_error": _worker_last_error,
             "last_stats": _worker_last_stats,
+            "translator": _translator_status(),
         }
 
 
