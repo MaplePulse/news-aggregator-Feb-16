@@ -1806,12 +1806,21 @@ def _init_db() -> None:
 
         # One-off clean-ups, each run once per database.
         conn.execute("CREATE TABLE IF NOT EXISTS one_off_fixes (name TEXT PRIMARY KEY, done_utc TEXT NOT NULL)")
-        fix = "2026-11-drop-ingr-translations"
+        fix = "2026-11-drop-greek-translations"
         if not conn.execute("SELECT 1 FROM one_off_fixes WHERE name = ?", (fix,)).fetchone():
-            # Until the Greek-letters fix in _TOKEN_RE, in.gr stories were wrongly grouped
-            # together and shared one translation, which was then saved under each story's
-            # own link. Drop those so every in.gr story is translated afresh.
-            conn.execute("DELETE FROM enrich_cache WHERE link LIKE 'https://www.in.gr/%'")
+            # Until the Greek-letters fix in _TOKEN_RE, unrelated stories from Greek-language
+            # sites (in.gr worst) were grouped together and shared one translation, which was
+            # then saved under each story's own link. Drop those so they are redone correctly.
+            from urllib.parse import urlparse
+            for src in SOURCES:
+                if get_lang_for_subdivision(src.get("subdivision_key") or src.get("country_key")) != "el":
+                    continue
+                host = (urlparse(src.get("feed_url") or "").hostname or "").removeprefix("www.")
+                if host:
+                    conn.execute(
+                        "DELETE FROM enrich_cache WHERE link LIKE ? OR link LIKE ?",
+                        (f"%://{host}/%", f"%.{host}/%"),
+                    )
             conn.execute("INSERT INTO one_off_fixes (name, done_utc) VALUES (?, ?)", (fix, datetime.now(timezone.utc).isoformat()))
         conn.commit()
 
