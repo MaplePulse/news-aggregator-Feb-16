@@ -1,4 +1,5 @@
 import gc
+import html as html_lib
 import os
 import re
 import json
@@ -1802,6 +1803,25 @@ def _init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_enrich_created ON cluster_enrich_cache(created_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_cluster_meta_created ON cluster_meta_cache(created_utc)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_top_cache_created ON top_cache(created_utc)")
+
+        # One-off clean-ups, each run once per database.
+        conn.execute("CREATE TABLE IF NOT EXISTS one_off_fixes (name TEXT PRIMARY KEY, done_utc TEXT NOT NULL)")
+        fix = "2026-11-drop-greek-translations"
+        if not conn.execute("SELECT 1 FROM one_off_fixes WHERE name = ?", (fix,)).fetchone():
+            # Until the Greek-letters fix in _TOKEN_RE, unrelated stories from Greek-language
+            # sites (in.gr worst) were grouped together and shared one translation, which was
+            # then saved under each story's own link. Drop those so they are redone correctly.
+            from urllib.parse import urlparse
+            for src in SOURCES:
+                if get_lang_for_subdivision(src.get("subdivision_key") or src.get("country_key")) != "el":
+                    continue
+                host = (urlparse(src.get("feed_url") or "").hostname or "").removeprefix("www.")
+                if host:
+                    conn.execute(
+                        "DELETE FROM enrich_cache WHERE link LIKE ? OR link LIKE ?",
+                        (f"%://{host}/%", f"%.{host}/%"),
+                    )
+            conn.execute("INSERT INTO one_off_fixes (name, done_utc) VALUES (?, ?)", (fix, datetime.now(timezone.utc).isoformat()))
         conn.commit()
 
 
@@ -1855,8 +1875,16 @@ def _strip_html(s: str) -> str:
     return s
 
 
+# WordPress feeds (in.gr and others) end every summary with "The post <title> appeared
+# first on <site>." Left in, those identical English words were the only words the
+# grouping code could read in Greek stories, so unrelated stories were merged into one.
+_WP_FOOTER_RE = re.compile(r"\s*\bThe post\b.*?\bappeared first on\b.*$", re.IGNORECASE | re.DOTALL)
+
+
 def _clean_text_any(s: str, max_chars: int = 700) -> str:
     s = _strip_html(s)
+    s = html_lib.unescape(s)  # e.g. "&#8211;" left over in some feeds
+    s = _WP_FOOTER_RE.sub("", s).strip()
     if len(s) > max_chars:
         s = s[: max_chars - 1].rstrip() + "…"
     return s
@@ -3186,10 +3214,20 @@ _STOPWORDS = set(
         "como", "mais", "menos", "tambem", "mas", "entre", "desde", "ate",
         "the", "and", "or", "to", "in", "on", "for", "with", "without", "of", "a", "an", "as",
         "is", "are", "was", "were", "be", "been", "by", "from", "at", "this", "that", "these", "those",
+        # Greek, Turkish and Croatian, written the way _norm_for_tokens leaves them
+        # (lower case, accents removed). Words of 1-2 letters are already skipped.
+        "και", "του", "της", "την", "τον", "των", "τους", "τις", "στο", "στη", "στην", "στον",
+        "στα", "στις", "στους", "για", "απο", "που", "ενα", "μια", "ενας", "ειναι", "δεν",
+        "μετα", "οτι", "οπως", "αλλα", "οταν", "ακομη", "ακομα", "πως", "οποιος", "οποια",
+        "bir", "icin", "ile", "olan", "gibi", "daha", "ama", "sonra", "kadar", "olarak", "her",
+        "cok", "veya", "ise", "bu", "kao", "koji", "koja", "koje", "nije", "ali", "kako", "ili",
+        "nakon", "prije", "sto", "biti", "bio", "bila", "bilo", "jos", "samo",
     ]
 )
 
-_TOKEN_RE = re.compile(r"[a-z0-9áéíóúüñçãõâêîôûàèìòù]+", re.IGNORECASE)
+# Letters and digits of any alphabet (Latin, Greek, Cyrillic...). The old pattern only
+# knew Latin letters, so Greek headlines produced no words at all.
+_TOKEN_RE = re.compile(r"[^\W_]+")
 _ENTITY_SEQ_RE = re.compile(
     r"\b([A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+(?:\s+[A-ZÁÉÍÓÚÜÑÇ][\wÁÉÍÓÚÜÑÇáéíóúüñçãõâêîôûàèìòù\-]+){1,4})\b"
 )
